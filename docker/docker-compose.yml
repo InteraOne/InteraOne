@@ -46,6 +46,8 @@ services:
       # Always sourced from docker/.env — single source of truth for Silo credentials
       SILO_ACCESS_KEY: ${SILO_ROOT_USER}
       SILO_SECRET_KEY: ${SILO_ROOT_PASSWORD}
+      API_URL_PRODUCTION: ${API_URL_PRODUCTION}
+      CDN_URL_PRODUCTION: ${SILO_PUBLIC_URL}
     depends_on:
       silo:
         condition: service_healthy
@@ -64,6 +66,10 @@ services:
       - "127.0.0.1:3000:3000"  # Caddy is the public entry-point; bind locally for health checks only
     env_file:
       - ../apps/console/.env.docker
+    environment:
+      VITE_API_URL: ${API_URL_PRODUCTION}/api/v1
+      VITE_SOCKET_URL: ${API_URL_PRODUCTION}
+      VITE_WIDGET_URL: ${SILO_PUBLIC_URL}/interaone-widget/v1/InteraOne.js
     depends_on:
       gateway:
         condition: service_healthy
@@ -89,9 +95,13 @@ services:
     env_file:
       - ../apps/gateway/.env.docker
     environment:
-      # Always sourced from docker/.env — single source of truth for Silo credentials
+      # Shared infrastructure values come from docker/.env so credentials cannot drift.
+      MONGODB_URI: mongodb://${MONGO_ROOT_USERNAME}:${MONGO_ROOT_PASSWORD}@mongodb:27017/${MONGO_DATABASE:-interaone}?authSource=admin
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
       SILO_ACCESS_KEY: ${SILO_ROOT_USER}
       SILO_SECRET_KEY: ${SILO_ROOT_PASSWORD}
+      SILO_PUBLIC_URL: ${SILO_PUBLIC_URL}
+      PUBLIC_API_URL: ${API_URL_PRODUCTION}
     volumes:
       - ../ee:/app/ee:ro
     depends_on:
@@ -121,7 +131,7 @@ services:
     env_file:
       - ../apps/agent/.env.docker
     environment:
-      # Always sourced from docker/.env — single source of truth for Silo credentials
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
       SILO_ACCESS_KEY: ${SILO_ROOT_USER}
       SILO_SECRET_KEY: ${SILO_ROOT_PASSWORD}
     depends_on:
@@ -145,9 +155,8 @@ services:
     env_file:
       - ../apps/worker/.env.docker
     environment:
-      # Always sourced from docker/.env — single source of truth for Silo credentials
-      SILO_ACCESS_KEY: ${SILO_ROOT_USER}
-      SILO_SECRET_KEY: ${SILO_ROOT_PASSWORD}
+      MONGODB_URI: mongodb://${MONGO_ROOT_USERNAME}:${MONGO_ROOT_PASSWORD}@mongodb:27017/${MONGO_DATABASE:-interaone}?authSource=admin
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
     volumes:
       - ../ee:/app/ee:ro
     depends_on:
