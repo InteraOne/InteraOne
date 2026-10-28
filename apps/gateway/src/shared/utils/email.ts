@@ -41,7 +41,11 @@ const DEFAULT_TEMPLATES = DEFAULT_EMAIL_TEMPLATES.reduce(
  * Used by callers to decide whether to enqueue an email job at all.
  */
 export function isEmailEnabled(): boolean {
-  return config.email.provider === "ses" || config.email.provider === "mailhog";
+  return (
+    config.email.provider === "ses" ||
+    config.email.provider === "smtp" ||
+    config.email.provider === "mailhog"
+  );
 }
 
 function renderTemplate(template: string, vars: TemplateVars): string {

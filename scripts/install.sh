@@ -289,6 +289,12 @@ prompt_config() {
     CDN_HOST=""
     LOG_HOST=""
     EMAIL_PROVIDER=""
+    SMTP_HOST=""
+    SMTP_PORT=""
+    SMTP_USER=""
+    SMTP_PASS=""
+    SMTP_SECURE="false"
+    SMTP_REQUIRE_TLS="false"
     AWS_REGION=""
     AWS_ACCESS_KEY_ID=""
     AWS_SECRET_ACCESS_KEY=""
@@ -351,8 +357,8 @@ prompt_config() {
     echo "Choose an Email Provider:"
     # Temporarily set PS3 prompt for select statement
     OLD_PS3="$PS3"
-    PS3="Enter selection [1-3]: "
-    select email_opt in "AWS SES" "MailHog (local dev)" "Disabled"; do
+    PS3="Enter selection [1-4]: "
+    select email_opt in "AWS SES" "Generic SMTP" "MailHog (local dev)" "Disabled"; do
         case $email_opt in
             "AWS SES")
                 EMAIL_PROVIDER="ses"
@@ -360,6 +366,29 @@ prompt_config() {
                 read -p "Enter AWS Secret Access Key: " AWS_SECRET_ACCESS_KEY
                 read -p "Enter AWS Region [us-east-1]: " AWS_REGION
                 AWS_REGION=${AWS_REGION:-us-east-1}
+                break
+                ;;
+            "Generic SMTP")
+                EMAIL_PROVIDER="smtp"
+                read -p "Enter SMTP host (e.g., smtp.gmail.com): " SMTP_HOST
+                read -p "Enter SMTP port [587]: " SMTP_PORT
+                SMTP_PORT=${SMTP_PORT:-587}
+                read -p "Enter SMTP username (leave blank for no authentication): " SMTP_USER
+                if [ -n "$SMTP_USER" ]; then
+                    read -s -p "Enter SMTP password/app password: " SMTP_PASS
+                    echo ""
+                fi
+                read -p "Use implicit TLS/SSL? [y/N]: " SMTP_SECURE_INPUT
+                if [[ "$SMTP_SECURE_INPUT" =~ ^[Yy]$ ]]; then
+                    SMTP_SECURE="true"
+                    SMTP_REQUIRE_TLS="false"
+                else
+                    SMTP_SECURE="false"
+                    SMTP_REQUIRE_TLS="true"
+                fi
+                AWS_ACCESS_KEY_ID=""
+                AWS_SECRET_ACCESS_KEY=""
+                AWS_REGION="us-east-1"
                 break
                 ;;
             "MailHog (local dev)")
@@ -376,7 +405,7 @@ prompt_config() {
                 AWS_REGION="us-east-1"
                 break
                 ;;
-            *) echo "Invalid option. Please choose 1, 2, or 3.";;
+            *) echo "Invalid option. Please choose 1, 2, 3, or 4.";;
         esac
     done
 
@@ -740,8 +769,16 @@ REDIS_HOST=redis
 REDIS_PORT=6379
 REDIS_PASSWORD=$REDIS_PASSWORD
 
-# Email provider: mailhog | ses | disabled
+# Email provider: mailhog | smtp | ses | disabled
 EMAIL_PROVIDER=$EMAIL_PROVIDER
+
+# Generic SMTP (required when EMAIL_PROVIDER=smtp)
+SMTP_HOST=$SMTP_HOST
+SMTP_PORT=$SMTP_PORT
+SMTP_USER=$SMTP_USER
+SMTP_PASS=$SMTP_PASS
+SMTP_SECURE=$SMTP_SECURE
+SMTP_REQUIRE_TLS=$SMTP_REQUIRE_TLS
 
 # AWS SES (required when EMAIL_PROVIDER=ses)
 AWS_REGION=$AWS_REGION

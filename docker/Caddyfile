@@ -26,7 +26,7 @@
     # REST API
     handle /api/* {
         reverse_proxy gateway:3002
-    }
+    }   
 }
 
 # ── Web frontend on a separate domain ────────────────────────────────────────

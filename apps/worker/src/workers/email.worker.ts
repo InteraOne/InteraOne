@@ -57,6 +57,61 @@ class MailhogEmailAdapter implements EmailAdapter {
   }
 }
 
+class SmtpEmailAdapter implements EmailAdapter {
+  private transporter: Transporter;
+
+  constructor() {
+    const { host, port, secure, requireTls, auth } = config.email.smtp;
+    this.transporter = nodemailer.createTransport({
+      host,
+      port,
+      secure,
+      requireTLS: requireTls,
+      auth: auth.user ? { user: auth.user, pass: auth.pass } : undefined,
+    });
+  }
+
+  async send(options: EmailJobData): Promise<void> {
+    const fromName = options.from?.name || config.email.from.name;
+    const fromEmail = options.from?.email || config.email.from.email;
+
+    const info = await this.transporter.sendMail({
+      from: `"${fromName}" <${fromEmail}>`,
+      to: options.to,
+      subject: options.subject,
+      html: options.html,
+      text: options.text,
+    });
+
+    const accepted: string[] = Array.isArray(info.accepted)
+      ? info.accepted.map(String)
+      : [];
+    const rejected: string[] = Array.isArray(info.rejected)
+      ? info.rejected.map(String)
+      : [];
+    const pending: string[] = Array.isArray(info.pending)
+      ? info.pending.map(String)
+      : [];
+    const intendedRecipient = options.to.trim().toLowerCase();
+    const intendedRecipientAccepted = accepted.some(
+      (recipient) => recipient.trim().toLowerCase() === intendedRecipient,
+    );
+
+    logger.info("SMTP delivery result", {
+      messageId: info.messageId,
+      accepted,
+      rejected,
+      pending,
+      response: info.response,
+      intendedRecipientAccepted,
+    });
+
+    if (!intendedRecipientAccepted) {
+      throw new Error("SMTP server did not accept the intended recipient");
+    }
+  }
+}
+
 class SesEmailAdapter implements EmailAdapter {
   private client: SESClient;
 
@@ -97,7 +152,6 @@ class DisabledEmailAdapter implements EmailAdapter {
   async send(options: EmailJobData): Promise<void> {
     logger.warn("Email skipped because provider is disabled", {
       to: options.to,
-      subject: options.subject,
     });
   }
 }
@@ -105,6 +159,7 @@ class DisabledEmailAdapter implements EmailAdapter {
 function buildAdapter(provider: EmailProvider): EmailAdapter {
   const providers: Record<EmailProvider, () => EmailAdapter> = {
     mailhog: () => new MailhogEmailAdapter(),
+    smtp: () => new SmtpEmailAdapter(),
     ses: () => new SesEmailAdapter(),
     disabled: () => new DisabledEmailAdapter(),
   };
@@ -134,9 +189,9 @@ export function startEmailWorker() {
     async (job) => {
       logger.info("Sending email job", {
         jobId: job.id,
+        jobName: job.name,
         queue: EMAIL_QUEUE,
         to: job.data.to,
-        subject: job.data.subject,
         provider: config.email.provider,
         attempt: job.attemptsMade + 1,
       });

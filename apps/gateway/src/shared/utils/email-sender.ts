@@ -5,11 +5,9 @@ export interface ResolvedFromEmail {
   email: string;
 }
 
-
-
 function defaultFrom(): ResolvedFromEmail {
   return {
-    name: "InteraOne",
+    name: config.email.from.name || "InteraOne",
     email: config.email.from.email,
   };
 }
