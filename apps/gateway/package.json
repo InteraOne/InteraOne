@@ -27,6 +27,7 @@
   "description": "Real-time chat support application backend",
   "dependencies": {
     "@aws-sdk/client-sesv2": "^3.1064.0",
+    "@composio/core": "0.14.1",
     "@socket.io/redis-adapter": "^8.2.1",
     "bcryptjs": "^2.4.3",
     "bullmq": "^5.0.0",

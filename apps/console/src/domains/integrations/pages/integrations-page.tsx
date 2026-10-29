@@ -39,6 +39,7 @@ import {
   useUpdateLeadSourceForm,
 } from "@/domains/channels/hooks/use-channels";
 import type { LeadSourceConnection } from "@/domains/channels/types/types";
+import { ComposioIntegrations } from "../components/composio-integrations";
 
 type Provider =
   | "facebook_lead_ads"
@@ -535,6 +536,8 @@ export function IntegrationsPage() {
           </div>
         )}
       </section>
+
+      <ComposioIntegrations />
 
       <Dialog
         open={Boolean(activeProvider)}

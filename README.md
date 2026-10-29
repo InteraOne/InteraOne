@@ -92,6 +92,17 @@ make all
 | `apps/worker` | Background jobs, queues, async processing |
 | `apps/launcher` | Embeddable widget for websites and products |
 
+### Optional Composio integrations
+
+Workspace admins can connect allowlisted third-party tools through Composio. The feature is disabled by default and runs only in `apps/gateway`; no provider token or Composio API key is sent to the browser or stored in InteraOne.
+
+1. Create a Composio project and enable its managed GitHub auth configuration.
+2. Allow your console URL (for example `https://app.example.com/dashboard/integrations`) as the Connect Link redirect.
+3. Set `COMPOSIO_ENABLED=true`, `COMPOSIO_API_KEY`, and `COMPOSIO_REDIRECT_URL` for the gateway. Set `COMPOSIO_ENVIRONMENT` to a stable deployment name so scoped user identities remain stable.
+4. Restart the gateway, open **Integrations → AI tool connections**, and connect GitHub.
+
+The initial policy enables only `GITHUB_SEARCH_REPOSITORIES`. An admin may opt into `GITHUB_CREATE_AN_ISSUE`; every use of that write action creates a short-lived, one-time approval. Public widget conversations do not receive Composio tools.
+
 <hr/>
 
 ## ❤️ Contributors

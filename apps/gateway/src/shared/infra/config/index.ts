@@ -85,6 +85,13 @@ interface Config {
       oauthScopes: string[];
     };
   };
+  composio: {
+    enabled: boolean;
+    apiKey?: string;
+    redirectUrl?: string;
+    environment: string;
+    timeoutMs: number;
+  };
 }
 
 function parseEmailProvider(value?: string): Config["email"]["provider"] {
@@ -265,6 +272,13 @@ const config: Config = {
         .map((scope) => scope.trim())
         .filter(Boolean),
     },
+  },
+  composio: {
+    enabled: process.env.COMPOSIO_ENABLED === "true",
+    apiKey: process.env.COMPOSIO_API_KEY,
+    redirectUrl: process.env.COMPOSIO_REDIRECT_URL,
+    environment: process.env.COMPOSIO_ENVIRONMENT || process.env.NODE_ENV || "development",
+    timeoutMs: parseInt(process.env.COMPOSIO_TIMEOUT_MS || "15000", 10),
   },
 };
 
