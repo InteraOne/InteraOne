@@ -8,6 +8,7 @@ import {
   RefreshCw,
   Search,
   Settings2,
+  Sparkles,
   Trash2,
   XCircle,
 } from "lucide-react";
@@ -84,6 +85,28 @@ const providers = [
     benefit: "Sync task lists securely",
     icon: GoogleTasksLogo,
   },
+];
+
+const featuredIntegrations = [
+  { slug: "github", name: "GitHub" },
+  { slug: "linear", name: "Linear" },
+  { slug: "jira", name: "Jira" },
+  { slug: "gmail", name: "Gmail" },
+  { slug: "slack", name: "Slack" },
+  { slug: "googlecalendar", name: "Google Calendar" },
+  { slug: "googledrive", name: "Google Drive" },
+  { slug: "googlesheets", name: "Google Sheets" },
+  { slug: "googledocs", name: "Google Docs" },
+  { slug: "notion", name: "Notion" },
+  { slug: "hubspot", name: "HubSpot" },
+  { slug: "zendesk", name: "Zendesk" },
+  { slug: "outlook", name: "Outlook" },
+  { slug: "googlemeet", name: "Google Meet" },
+  { slug: "zoom", name: "Zoom" },
+  { slug: "microsoft_teams", name: "Microsoft Teams" },
+  { slug: "airtable", name: "Airtable" },
+  { slug: "trello", name: "Trello" },
+  { slug: "shopify", name: "Shopify" },
 ];
 
 function ResultBanner({ success, text }: { success: boolean; text: string }) {
@@ -326,6 +349,7 @@ export function IntegrationsPage() {
   const updateForm = useUpdateLeadSourceForm();
   const deleteSource = useDeleteLeadSource();
   const [query, setQuery] = useState("");
+  const [view, setView] = useState<"all" | "data" | "ai">("all");
   const [sourceToDelete, setSourceToDelete] =
     useState<LeadSourceConnection | null>(null);
   const [activeProvider, setActiveProvider] = useState<Provider | null>(null);
@@ -383,27 +407,94 @@ export function IntegrationsPage() {
   return (
     <div className="mx-auto max-w-6xl space-y-6 pb-10">
       <section className="space-y-5" data-tour-id="page-integrations-heading">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">Integrations</h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Connect apps and automate how leads enter your workspace.
-            </p>
+        <div className="relative overflow-hidden rounded-2xl border border-border/70 bg-card px-5 py-7 shadow-sm sm:px-8 sm:py-9">
+          <div className="pointer-events-none absolute -right-24 -top-32 h-80 w-80 rounded-full bg-primary/10 blur-3xl" />
+          <div className="pointer-events-none absolute -bottom-24 left-1/3 h-56 w-56 rounded-full bg-violet-500/[0.07] blur-3xl" />
+          <div className="relative grid gap-8 lg:grid-cols-[1fr_380px] lg:items-center">
+            <div className="max-w-2xl">
+              <div className="mb-4 flex items-center gap-2 text-xs font-semibold text-primary">
+                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+                  <Sparkles className="h-4 w-4" />
+                </span>
+                INTEGRATION MARKETPLACE
+              </div>
+              <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
+                Connect your tools.
+                <br />
+                <span className="text-muted-foreground">
+                  Put your workspace on autopilot.
+                </span>
+              </h1>
+              <p className="mt-4 max-w-xl text-sm leading-6 text-muted-foreground">
+                Bring customer data into InteraOne and let your AI safely work
+                across the apps your team uses every day.
+              </p>
+            </div>
+            <div className="space-y-4">
+              <div className="relative flex min-h-48 flex-col items-center justify-center overflow-hidden px-4 py-5">
+                <div className="pointer-events-none absolute left-1/2 top-1/2 h-36 w-64 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary/15 blur-3xl" />
+                <div className="pointer-events-none absolute left-8 top-5 h-24 w-24 rounded-full bg-violet-400/15 blur-2xl" />
+                <div className="pointer-events-none absolute bottom-2 right-8 h-24 w-24 rounded-full bg-blue-400/15 blur-2xl" />
+                <div className="pointer-events-none absolute inset-y-0 left-0 w-14 bg-gradient-to-r from-card via-card/70 to-transparent backdrop-blur-[2px]" />
+                <div className="pointer-events-none absolute inset-y-0 right-0 w-14 bg-gradient-to-l from-card via-card/70 to-transparent backdrop-blur-[2px]" />
+                <p className="relative z-10 mb-4 text-center text-[11px] font-semibold uppercase tracking-[0.16em] text-foreground/70">
+                  Works with your favorite tools
+                </p>
+                <div className="relative z-10 mx-auto grid w-full max-w-[330px] grid-cols-6 gap-2.5">
+                  {featuredIntegrations.map((integration) => (
+                    <div
+                      key={integration.slug}
+                      className="flex aspect-square items-center justify-center rounded-xl bg-background/75 p-2 shadow-[0_6px_20px_-8px_rgba(0,0,0,0.35)] backdrop-blur-md"
+                    >
+                      <img
+                        src={`/integration-logos/${integration.slug}.png`}
+                        alt=""
+                        className="h-6 w-6 object-contain drop-shadow-sm"
+                      />
+                    </div>
+                  ))}
+                </div>
+                <div className="pointer-events-none absolute inset-x-0 top-0 h-8 bg-gradient-to-b from-card/80 to-transparent backdrop-blur-[1px]" />
+                <div className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-card/80 to-transparent backdrop-blur-[1px]" />
+              </div>
+              <div>
+                <div className="mb-2 flex items-center justify-between text-xs">
+                  <span className="font-medium">Find an integration</span>
+                  <span className="text-muted-foreground">
+                    {connectedCount} direct connections
+                  </span>
+                </div>
+                <label className="relative block w-full">
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <input
+                    value={query}
+                    onChange={(event) => setQuery(event.target.value)}
+                    placeholder="Search Gmail, Slack, HubSpot..."
+                    className="h-11 w-full rounded-xl border border-border/80 bg-background/90 pl-10 pr-3 text-sm shadow-sm outline-none transition focus:border-primary focus:ring-3 focus:ring-primary/10"
+                  />
+                </label>
+              </div>
+            </div>
           </div>
-          <div className="flex items-center gap-3">
-            <span className="whitespace-nowrap text-xs text-muted-foreground">
-              {connectedCount} connected
-            </span>
-            <label className="relative block w-full sm:w-64">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <input
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search integrations"
-                className="h-9 w-full rounded-md border bg-background pl-9 pr-3 text-sm outline-none focus:border-primary"
-              />
-            </label>
-          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2 border-b border-border/70 pb-4">
+          {(
+            [
+              { id: "all", label: "All integrations" },
+              { id: "data", label: "Data & lead sync" },
+              { id: "ai", label: "AI action apps" },
+            ] as const
+          ).map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => setView(item.id)}
+              className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${view === item.id ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}
+            >
+              {item.label}
+            </button>
+          ))}
         </div>
 
         {facebookResult === "connected" && (
@@ -449,95 +540,120 @@ export function IntegrationsPage() {
           />
         )}
 
-        {shownProviders.length ? (
-          <div className="grid gap-4 sm:grid-cols-2">
-            {shownProviders.map((provider) => {
-              const sources = leadSources.filter(
-                (source) => source.provider === provider.id,
-              );
-              const connected = sources.length > 0;
-              const pending = isConnecting(provider.id);
-              const error = connectionError(provider.id);
-              const Icon = provider.icon;
-              return (
-                <article
-                  key={provider.id}
-                  data-tour-id={`page-integrations-${
-                    provider.id === "facebook_lead_ads"
-                      ? "facebook"
-                      : "google-forms"
-                  }`}
-                  className="rounded-lg border bg-card"
-                >
-                  <div className="p-5">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex h-11 w-11 items-center justify-center rounded-lg border bg-background p-2">
-                        <Icon className="h-full w-full" />
-                      </div>
-                      <div className="flex items-center gap-2 pt-1 text-xs text-muted-foreground">
-                        <span
-                          className={`h-2 w-2 rounded-full ${connected ? "bg-emerald-500" : "bg-muted-foreground/35"}`}
-                        />
-                        <span>{connected ? "Connected" : "Not connected"}</span>
-                      </div>
-                    </div>
-                    <div className="mt-4">
-                      <p className="text-[11px] font-medium text-muted-foreground">
-                        {provider.brand}
-                      </p>
-                      <h3 className="mt-1 text-base font-semibold tracking-tight">
-                        {provider.name}
-                      </h3>
-                      <p className="mt-1.5 text-sm leading-5 text-muted-foreground">
-                        {provider.description}
-                      </p>
-                    </div>
-                    <div className="mt-5 flex items-center justify-between gap-3">
-                      <span className="text-xs font-medium text-muted-foreground">
-                        {provider.benefit}
-                      </span>
-                      <Button
-                        className="h-9 min-w-24 gap-2"
-                        variant={connected ? "outline" : "default"}
-                        disabled={pending}
-                        onClick={() =>
-                          connected
-                            ? setActiveProvider(provider.id)
-                            : connect(provider.id)
-                        }
-                      >
-                        {pending ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <Settings2 className="h-4 w-4" />
+        {view !== "ai" && (shownProviders.length > 0 || view === "data") && (
+          <div className="space-y-4 pt-2">
+            <div className="flex items-end justify-between gap-4">
+              <div>
+                <h2 className="font-semibold tracking-tight">
+                  Native connections
+                </h2>
+                <p className="mt-0.5 text-sm text-muted-foreground">
+                  Direct provider connections managed by InteraOne for syncing
+                  leads, calendars, and tasks.
+                </p>
+              </div>
+              <span className="hidden text-xs text-muted-foreground sm:inline">
+                Native connections
+              </span>
+            </div>
+            {shownProviders.length ? (
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                {shownProviders.map((provider) => {
+                  const sources = leadSources.filter(
+                    (source) => source.provider === provider.id,
+                  );
+                  const connected = sources.length > 0;
+                  const pending = isConnecting(provider.id);
+                  const error = connectionError(provider.id);
+                  const Icon = provider.icon;
+                  return (
+                    <article
+                      key={provider.id}
+                      data-tour-id={`page-integrations-${
+                        provider.id === "facebook_lead_ads"
+                          ? "facebook"
+                          : "google-forms"
+                      }`}
+                      className={`group overflow-hidden rounded-xl border bg-card shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md ${connected ? "border-emerald-500/25" : "border-border/70 hover:border-primary/30"}`}
+                    >
+                      <div className="p-4">
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-border/60 bg-background p-2 shadow-xs">
+                            <Icon className="h-full w-full" />
+                          </div>
+                          <div
+                            className={`flex items-center gap-1.5 rounded-full px-2 py-1 text-[10px] font-semibold ${connected ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "bg-muted text-muted-foreground"}`}
+                          >
+                            <span
+                              className={`h-1.5 w-1.5 rounded-full ${connected ? "bg-emerald-500" : "bg-muted-foreground/35"}`}
+                            />
+                            <span>
+                              {connected ? "Connected" : "Not connected"}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="mt-3.5">
+                          <p className="text-[11px] font-medium text-muted-foreground">
+                            {provider.brand}
+                          </p>
+                          <h3 className="mt-0.5 text-sm font-semibold tracking-tight">
+                            {provider.name}
+                          </h3>
+                          <p className="mt-1.5 line-clamp-2 min-h-10 text-xs leading-5 text-muted-foreground">
+                            {provider.description}
+                          </p>
+                        </div>
+                        <div className="mt-4 flex items-center justify-between gap-3 border-t border-border/60 pt-3">
+                          <span className="truncate text-[11px] text-muted-foreground">
+                            {sources.length
+                              ? `${sources.length} account${sources.length === 1 ? "" : "s"}`
+                              : provider.benefit}
+                          </span>
+                          <Button
+                            size="sm"
+                            className="min-w-20 gap-1.5"
+                            variant={connected ? "outline" : "default"}
+                            disabled={pending}
+                            onClick={() =>
+                              connected
+                                ? setActiveProvider(provider.id)
+                                : connect(provider.id)
+                            }
+                          >
+                            {pending ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Settings2 className="h-3.5 w-3.5" />
+                            )}
+                            {connected ? "Manage" : "Connect"}
+                          </Button>
+                        </div>
+                        {error && (
+                          <p className="mt-3 text-xs font-medium text-destructive">
+                            {error instanceof Error
+                              ? error.message
+                              : `Could not connect ${provider.name}`}
+                          </p>
                         )}
-                        {connected ? "Manage" : "Connect"}
-                      </Button>
-                    </div>
-                    {error && (
-                      <p className="mt-3 text-xs font-medium text-destructive">
-                        {error instanceof Error
-                          ? error.message
-                          : `Could not connect ${provider.name}`}
-                      </p>
-                    )}
-                  </div>
-                </article>
-              );
-            })}
-          </div>
-        ) : (
-          <div className="rounded-[26px] border border-dashed bg-muted/20 px-6 py-16 text-center">
-            <Search className="mx-auto h-6 w-6 text-muted-foreground" />
-            <p className="mt-3 font-medium">No integrations found</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Try a different app or provider name.
-            </p>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-dashed bg-muted/20 px-6 py-12 text-center">
+                <Search className="mx-auto h-6 w-6 text-muted-foreground" />
+                <p className="mt-3 font-medium">No integrations found</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Try a different app or provider name.
+                </p>
+              </div>
+            )}
           </div>
         )}
       </section>
 
-      <ComposioIntegrations />
+      {view !== "data" && <ComposioIntegrations query={query} />}
 
       <Dialog
         open={Boolean(activeProvider)}
