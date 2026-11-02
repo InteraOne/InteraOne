@@ -5,7 +5,9 @@ import {
 } from "@modules/integrations/integrations.utils";
 import {
   getCatalogTool,
+  inferToolRisk,
   INTEGRATION_CATALOG,
+  mergeRemoteCatalogTools,
 } from "@modules/integrations/integrations.policy";
 import { buildComposioUserId } from "@modules/integrations/composio.adapter";
 
@@ -19,7 +21,9 @@ describe("Composio integration policy", () => {
   });
 
   it("enables the verified GitHub search action as read-only", () => {
-    expect(getCatalogTool("github", "GITHUB_SEARCH_REPOSITORIES")).toMatchObject({
+    expect(
+      getCatalogTool("github", "GITHUB_SEARCH_REPOSITORIES"),
+    ).toMatchObject({
       risk: "read",
       defaultEnabled: true,
     });
@@ -33,7 +37,40 @@ describe("Composio integration policy", () => {
   });
 
   it("does not admit unknown action slugs", () => {
-    expect(getCatalogTool("github", "GITHUB_DELETE_A_REPOSITORY")).toBeUndefined();
+    expect(
+      getCatalogTool("github", "GITHUB_DELETE_A_REPOSITORY"),
+    ).toBeUndefined();
+  });
+
+  it("classifies live Composio actions with conservative permission defaults", () => {
+    expect(inferToolRisk("ZOOM_LIST_MEETINGS")).toBe("read");
+    expect(inferToolRisk("ZOOM_CREATE_A_MEETING")).toBe("write");
+    expect(inferToolRisk("ZOOM_DELETE_A_MEETING")).toBe("sensitive");
+  });
+
+  it("merges every live action for an allowed toolkit", () => {
+    const catalog = mergeRemoteCatalogTools([
+      {
+        toolkitSlug: "zoom",
+        slug: "ZOOM_LIST_MEETINGS",
+        name: "List meetings",
+        description: "Lists meetings.",
+      },
+      {
+        toolkitSlug: "zoom",
+        slug: "ZOOM_CREATE_A_WEBINAR",
+        name: "Create webinar",
+        description: "Creates a webinar.",
+      },
+    ]);
+    const zoom = catalog.find((toolkit) => toolkit.slug === "zoom");
+    expect(zoom?.tools).toHaveLength(2);
+    expect(
+      zoom?.tools.find((tool) => tool.slug === "ZOOM_LIST_MEETINGS"),
+    ).toMatchObject({ risk: "read", defaultEnabled: true });
+    expect(
+      zoom?.tools.find((tool) => tool.slug === "ZOOM_CREATE_A_WEBINAR"),
+    ).toMatchObject({ risk: "write", defaultEnabled: false });
   });
 
   it("exposes the reviewed InteraOne toolkit catalog with Composio summaries", () => {
@@ -45,8 +82,23 @@ describe("Composio integration policy", () => {
       "jira",
       "notion",
       "hubspot",
+      "googledrive",
+      "trello",
+      "asana",
+      "linear",
+      "googlesheets",
+      "googledocs",
+      "zendesk",
+      "outlook",
+      "googlemeet",
+      "microsoft_teams",
+      "airtable",
+      "shopify",
+      "zoom",
     ]);
-    expect(INTEGRATION_CATALOG.flatMap((toolkit) => toolkit.tools)).toHaveLength(44);
+    expect(
+      INTEGRATION_CATALOG.flatMap((toolkit) => toolkit.tools),
+    ).toHaveLength(153);
     expect(getCatalogTool("gmail", "GMAIL_FETCH_EMAILS")?.description).toMatch(
       /^Fetches a list of email messages from a Gmail account/,
     );
@@ -54,14 +106,38 @@ describe("Composio integration policy", () => {
       risk: "write",
       defaultEnabled: false,
     });
-    expect(getCatalogTool("jira", "JIRA_SEARCH_FOR_ISSUES_USING_JQL_POST")).toBeUndefined();
+    expect(
+      getCatalogTool("googlesheets", "GOOGLESHEETS_QUERY_TABLE"),
+    ).toMatchObject({ risk: "read", defaultEnabled: true });
+    expect(
+      getCatalogTool("microsoft_teams", "MICROSOFT_TEAMS_CREATE_MEETING"),
+    ).toMatchObject({ risk: "write", defaultEnabled: false });
+    expect(getCatalogTool("zoom", "ZOOM_LIST_MEETINGS")).toMatchObject({
+      risk: "read",
+      defaultEnabled: true,
+    });
+    expect(getCatalogTool("zoom", "ZOOM_CREATE_A_MEETING")).toMatchObject({
+      risk: "write",
+      defaultEnabled: false,
+    });
+    expect(
+      getCatalogTool("jira", "JIRA_SEARCH_FOR_ISSUES_USING_JQL_POST"),
+    ).toBeUndefined();
   });
 });
 
 describe("integration approval argument binding", () => {
   it("produces the same hash regardless of object key order", () => {
-    const left = canonicalizeArguments({ repo: "InteraOne", owner: "InteraOne", nested: { b: 2, a: 1 } });
-    const right = canonicalizeArguments({ nested: { a: 1, b: 2 }, owner: "InteraOne", repo: "InteraOne" });
+    const left = canonicalizeArguments({
+      repo: "InteraOne",
+      owner: "InteraOne",
+      nested: { b: 2, a: 1 },
+    });
+    const right = canonicalizeArguments({
+      nested: { a: 1, b: 2 },
+      owner: "InteraOne",
+      repo: "InteraOne",
+    });
     expect(left.hash).toBe(right.hash);
     expect(left.arguments).toEqual(right.arguments);
   });
@@ -73,7 +149,9 @@ describe("integration approval argument binding", () => {
   });
 
   it("rejects oversized argument payloads", () => {
-    expect(() => canonicalizeArguments({ body: "x".repeat(17_000) })).toThrow(/16 KB/);
+    expect(() => canonicalizeArguments({ body: "x".repeat(17_000) })).toThrow(
+      /16 KB/,
+    );
   });
 });
 
