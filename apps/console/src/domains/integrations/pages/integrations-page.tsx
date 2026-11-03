@@ -407,73 +407,62 @@ export function IntegrationsPage() {
   return (
     <div className="mx-auto max-w-6xl space-y-6 pb-10">
       <section className="space-y-5" data-tour-id="page-integrations-heading">
-        <div className="relative overflow-hidden rounded-2xl border border-border/70 bg-card px-5 py-7 shadow-sm sm:px-8 sm:py-9">
-          <div className="pointer-events-none absolute -right-24 -top-32 h-80 w-80 rounded-full bg-primary/10 blur-3xl" />
-          <div className="pointer-events-none absolute -bottom-24 left-1/3 h-56 w-56 rounded-full bg-violet-500/[0.07] blur-3xl" />
-          <div className="relative grid gap-8 lg:grid-cols-[1fr_380px] lg:items-center">
-            <div className="max-w-2xl">
-              <div className="mb-4 flex items-center gap-2 text-xs font-semibold text-primary">
-                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-                  <Sparkles className="h-4 w-4" />
-                </span>
-                INTEGRATION MARKETPLACE
-              </div>
-              <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
-                Connect your tools.
-                <br />
-                <span className="text-muted-foreground">
-                  Put your workspace on autopilot.
-                </span>
-              </h1>
-              <p className="mt-4 max-w-xl text-sm leading-6 text-muted-foreground">
-                Bring customer data into InteraOne and let your AI safely work
-                across the apps your team uses every day.
-              </p>
+        <div className="relative isolate overflow-hidden px-4 py-8 sm:py-12">
+          <div className="pointer-events-none absolute left-1/2 top-1/2 -z-10 h-72 w-[44rem] -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary/[0.09] blur-3xl" />
+          <div className="pointer-events-none absolute left-[18%] top-24 -z-10 h-40 w-40 rounded-full bg-violet-400/10 blur-3xl" />
+          <div className="pointer-events-none absolute bottom-16 right-[18%] -z-10 h-40 w-40 rounded-full bg-sky-400/10 blur-3xl" />
+
+          <div className="mx-auto flex max-w-3xl flex-col items-center text-center">
+            <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-primary/[0.08] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-primary">
+              <Sparkles className="h-3.5 w-3.5" />
+              Integration marketplace
             </div>
-            <div className="space-y-4">
-              <div className="relative flex min-h-48 flex-col items-center justify-center overflow-hidden px-4 py-5">
-                <div className="pointer-events-none absolute left-1/2 top-1/2 h-36 w-64 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary/15 blur-3xl" />
-                <div className="pointer-events-none absolute left-8 top-5 h-24 w-24 rounded-full bg-violet-400/15 blur-2xl" />
-                <div className="pointer-events-none absolute bottom-2 right-8 h-24 w-24 rounded-full bg-blue-400/15 blur-2xl" />
-                <div className="pointer-events-none absolute inset-y-0 left-0 w-14 bg-gradient-to-r from-card via-card/70 to-transparent backdrop-blur-[2px]" />
-                <div className="pointer-events-none absolute inset-y-0 right-0 w-14 bg-gradient-to-l from-card via-card/70 to-transparent backdrop-blur-[2px]" />
-                <p className="relative z-10 mb-4 text-center text-[11px] font-semibold uppercase tracking-[0.16em] text-foreground/70">
-                  Works with your favorite tools
-                </p>
-                <div className="relative z-10 mx-auto grid w-full max-w-[330px] grid-cols-6 gap-2.5">
-                  {featuredIntegrations.map((integration) => (
-                    <div
-                      key={integration.slug}
-                      className="flex aspect-square items-center justify-center rounded-xl bg-background/75 p-2 shadow-[0_6px_20px_-8px_rgba(0,0,0,0.35)] backdrop-blur-md"
-                    >
-                      <img
-                        src={`/integration-logos/${integration.slug}.png`}
-                        alt=""
-                        className="h-6 w-6 object-contain drop-shadow-sm"
-                      />
-                    </div>
-                  ))}
-                </div>
-                <div className="pointer-events-none absolute inset-x-0 top-0 h-8 bg-gradient-to-b from-card/80 to-transparent backdrop-blur-[1px]" />
-                <div className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-card/80 to-transparent backdrop-blur-[1px]" />
+            <h1 className="text-3xl font-bold tracking-[-0.035em] sm:text-5xl">
+              Connect every tool your team loves.
+            </h1>
+            <p className="mt-4 max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">
+              Bring your workspace together and let InteraOne safely turn
+              everyday apps into one connected AI workflow.
+            </p>
+
+            <div className="relative mt-8 w-full py-5">
+              <div className="pointer-events-none absolute left-1/2 top-1/2 h-36 w-[85%] -translate-x-1/2 -translate-y-1/2 rounded-full bg-background/80 blur-2xl" />
+              <p className="relative z-10 mb-5 text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                Works with your favorite tools
+              </p>
+              <div className="relative z-10 mx-auto flex max-w-2xl flex-wrap items-center justify-center gap-3">
+                {featuredIntegrations.map((integration, index) => (
+                  <div
+                    key={integration.slug}
+                    title={integration.name}
+                    className={`flex h-12 w-12 items-center justify-center rounded-2xl bg-background/80 p-2.5 shadow-[0_10px_30px_-12px_rgba(0,0,0,0.45)] ring-1 ring-border/40 backdrop-blur-xl transition duration-300 hover:-translate-y-1 hover:scale-105 hover:shadow-lg ${index % 4 === 1 ? "sm:-translate-y-1" : index % 4 === 3 ? "sm:translate-y-1" : ""}`}
+                  >
+                    <img
+                      src={`/integration-logos/${integration.slug}.png`}
+                      alt={integration.name}
+                      className="h-7 w-7 object-contain drop-shadow-sm"
+                    />
+                  </div>
+                ))}
               </div>
-              <div>
-                <div className="mb-2 flex items-center justify-between text-xs">
-                  <span className="font-medium">Find an integration</span>
-                  <span className="text-muted-foreground">
-                    {connectedCount} direct connections
-                  </span>
-                </div>
-                <label className="relative block w-full">
-                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <input
-                    value={query}
-                    onChange={(event) => setQuery(event.target.value)}
-                    placeholder="Search Gmail, Slack, HubSpot..."
-                    className="h-11 w-full rounded-xl border border-border/80 bg-background/90 pl-10 pr-3 text-sm shadow-sm outline-none transition focus:border-primary focus:ring-3 focus:ring-primary/10"
-                  />
-                </label>
+            </div>
+
+            <div className="mt-5 w-full max-w-2xl">
+              <div className="mb-2 flex items-center justify-between px-1 text-xs">
+                <span className="font-medium">Find an integration</span>
+                <span className="text-muted-foreground">
+                  {connectedCount} direct connections
+                </span>
               </div>
+              <label className="relative block w-full">
+                <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="Search thousands of integrations..."
+                  className="h-12 w-full rounded-2xl border border-border/70 bg-background/85 pl-11 pr-4 text-sm shadow-[0_12px_35px_-18px_rgba(0,0,0,0.45)] outline-none backdrop-blur-xl transition focus:border-primary/60 focus:ring-4 focus:ring-primary/10"
+                />
+              </label>
             </div>
           </div>
         </div>
