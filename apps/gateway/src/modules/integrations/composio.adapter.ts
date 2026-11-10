@@ -1,9 +1,10 @@
-import { Composio } from "@composio/core";
+import { Composio, SessionPreset } from "@composio/core";
 import config from "@shared/infra/config";
 import { AppError } from "@shared/core/errors";
 import { boundedResult, safeIntegrationError } from "./integrations.utils";
 
 let client: Composio | undefined;
+const scopedSessions = new Map<string, any>();
 
 function assertConfigured(): void {
   if (!config.composio.enabled)
@@ -29,6 +30,54 @@ function getClient(): Composio {
     });
   }
   return client;
+}
+
+function scopedSessionKey(params: {
+  composioUserId: string;
+  toolkitSlug: string;
+  connectedAccountId: string;
+  allowedToolSlugs: string[];
+}): string {
+  return [
+    params.composioUserId,
+    params.toolkitSlug,
+    params.connectedAccountId,
+    ...[...params.allowedToolSlugs].sort(),
+  ].join(":");
+}
+
+async function getScopedSession(
+  params: {
+    composioUserId: string;
+    toolkitSlug: string;
+    connectedAccountId: string;
+    allowedToolSlugs: string[];
+  },
+  signal: AbortSignal,
+) {
+  const key = scopedSessionKey(params);
+  const cached = scopedSessions.get(key);
+  if (cached) return cached;
+
+  const session = await getClient().sessions.create(
+    params.composioUserId,
+    {
+      sessionPreset: SessionPreset.DIRECT_TOOLS,
+      toolkits: [params.toolkitSlug],
+      tools: {
+        [params.toolkitSlug]: { enable: params.allowedToolSlugs },
+      },
+      connectedAccounts: {
+        [params.toolkitSlug]: [params.connectedAccountId],
+      },
+      manageConnections: false,
+      sandbox: { enable: false },
+    },
+    { signal },
+  );
+
+  scopedSessions.set(key, session);
+  return session;
 }
 
 async function withTimeout<T>(
@@ -203,6 +252,38 @@ export const composioAdapter = {
     );
   },
 
+  /**
+   * Resolve the exact tools exposed by a tenant-scoped Composio session.
+   * session.tools() is intentionally the source of truth so the AI receives
+   * Composio's current names, descriptions, and JSON input schemas.
+   */
+  async sessionTools(params: {
+    composioUserId: string;
+    toolkitSlug: string;
+    connectedAccountId: string;
+    allowedToolSlugs: string[];
+  }): Promise<
+    Array<{
+      slug: string;
+      name?: string;
+      description?: string;
+      inputParameters?: Record<string, unknown>;
+    }>
+  > {
+    return withTimeout(async (signal) => {
+      const session = await getScopedSession(params, signal);
+      const tools = (await session.tools(undefined, { signal })) as Array<any>;
+      return tools
+        .filter((tool) => typeof tool?.slug === "string")
+        .map((tool) => ({
+          slug: tool.slug,
+          name: tool.name,
+          description: tool.description,
+          inputParameters: tool.inputParameters,
+        }));
+    });
+  },
+
   async execute(params: {
     composioUserId: string;
     toolkitSlug: string;
@@ -210,20 +291,15 @@ export const composioAdapter = {
     toolSlug: string;
     arguments: Record<string, unknown>;
   }): Promise<unknown> {
-    const composio = getClient();
     return withTimeout(async (signal) => {
-      const session = await composio.sessions.create(
-        params.composioUserId,
+      const session = await getScopedSession(
         {
-          toolkits: [params.toolkitSlug],
-          tools: { [params.toolkitSlug]: { enable: [params.toolSlug] } },
-          connectedAccounts: {
-            [params.toolkitSlug]: [params.connectedAccountId],
-          },
-          manageConnections: false,
-          sandbox: { enable: false },
+          composioUserId: params.composioUserId,
+          toolkitSlug: params.toolkitSlug,
+          connectedAccountId: params.connectedAccountId,
+          allowedToolSlugs: [params.toolSlug],
         },
-        { signal },
+        signal,
       );
       const result = await session.execute(params.toolSlug, params.arguments, {
         account: params.connectedAccountId,

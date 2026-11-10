@@ -9,11 +9,28 @@ import logger from "@shared/core/logger";
 import config from "@shared/infra/config";
 import { enqueueChannelVerifiedEmail } from "@shared/queues/email.queue";
 import { buildTicketLifecycleEmail } from "@shared/utils/email";
+import { createHash } from "node:crypto";
 import {
   CreateEmailChannelInput,
   CreateWhatsAppChannelInput,
   CreateTelegramChannelInput,
 } from "./channels.types";
+
+export interface TicketFollowupResult {
+  success: boolean;
+  duplicate?: boolean;
+  messageId?: string;
+  providerMessageId?: string;
+  error?: string;
+  errorCode?:
+    | "TICKET_NOT_FOUND"
+    | "IDEMPOTENCY_CONFLICT"
+    | "REQUEST_IN_PROGRESS"
+    | "INVALID_RECIPIENT"
+    | "EMAIL_CHANNEL_NOT_FOUND"
+    | "EMAIL_SEND_FAILED"
+    | "DATABASE_ERROR";
+}
 
 // ─── Service ──────────────────────────────────────────────────────────────────
 
@@ -548,142 +565,250 @@ export class ChannelService {
     ticketId: string,
     content: string,
     agentUser?: { userId: string; name: string; email: string },
-  ): Promise<void> {
-    const ticket = await Ticket.findOne({ _id: ticketId, organizationId });
-    if (!ticket) {
-      logger.error(`[ChannelService.sendTicketFollowup] Ticket ${ticketId} not found`);
-      return;
+    idempotencyKey?: string,
+  ): Promise<TicketFollowupResult> {
+    const normalizedKey = idempotencyKey?.trim();
+    if (!normalizedKey) {
+      return {
+        success: false,
+        errorCode: "IDEMPOTENCY_CONFLICT",
+        error: "An idempotency key is required",
+      };
     }
 
-    const metadata = (ticket.metadata || {}) as Record<string, unknown>;
-    let recipientName =
-      typeof metadata.requesterName === "string" && metadata.requesterName.trim()
-        ? metadata.requesterName.trim()
-        : "there";
+    const keyHash = createHash("sha256").update(normalizedKey).digest("hex");
+    const contentHash = createHash("sha256").update(content).digest("hex");
+    const followupPath = `metadata.ticketFollowups.${keyHash}`;
+    let emailSent = false;
 
-    // Resolve recipient email — prefer contact record, then ticket metadata, then linked conversation metadata
-    let to: string | undefined;
-    if (ticket.contactId) {
-      const contact = await Contact.findOne({
-        _id: ticket.contactId,
-        organizationId,
-      })
-        .select("name email")
-        .lean();
-      to = contact?.email || undefined;
-      if (contact?.name) {
-        recipientName = contact.name;
+    const releaseReservation = async (): Promise<void> => {
+      try {
+        await Ticket.updateOne(
+          { _id: ticketId, organizationId },
+          { $unset: { [followupPath]: "" } },
+        );
+      } catch (err: any) {
+        logger.error("[ChannelService.sendTicketFollowup] Failed to release idempotency reservation", {
+          ticketId,
+          error: err.message,
+        });
       }
-    }
+    };
 
-    if (!to && typeof metadata.requesterEmail === "string") {
-      to = metadata.requesterEmail.trim().toLowerCase();
-    }
-
-    if (!to && ticket.conversationId) {
-      const conversation = await Conversation.findOne({
-        _id: ticket.conversationId,
-        organizationId,
-      })
-        .select("sessionId metadata.senderName metadata.senderEmail")
-        .lean();
-
-      if (typeof conversation?.metadata?.senderEmail === "string") {
-        to = conversation.metadata.senderEmail.trim().toLowerCase();
-      }
-      if (
-        recipientName === "there" &&
-        typeof conversation?.metadata?.senderName === "string" &&
-        conversation.metadata.senderName.trim()
-      ) {
-        recipientName = conversation.metadata.senderName.trim();
-      }
-
-      if (!to && conversation?.sessionId) {
-        const contact = await Contact.findOne({
+    try {
+      // Atomically reserve this request before any provider call so concurrent
+      // retries cannot send the same email twice.
+      const ticket = await Ticket.findOneAndUpdate(
+        {
+          _id: ticketId,
           organizationId,
-          sessionId: conversation.sessionId,
+          [followupPath]: { $exists: false },
+        },
+        {
+          $set: {
+            [followupPath]: {
+              status: "processing",
+              contentHash,
+              createdAt: new Date(),
+            },
+          },
+        },
+        { new: true },
+      );
+
+      if (!ticket) {
+        const existingTicket = await Ticket.findOne({ _id: ticketId, organizationId }).lean();
+        if (!existingTicket) {
+          return {
+            success: false,
+            errorCode: "TICKET_NOT_FOUND",
+            error: "Ticket not found",
+          };
+        }
+
+        const existingFollowup = (existingTicket.metadata as any)?.ticketFollowups?.[keyHash];
+        if (existingFollowup?.contentHash !== contentHash) {
+          return {
+            success: false,
+            errorCode: "IDEMPOTENCY_CONFLICT",
+            error: "The idempotency key was already used with different content",
+          };
+        }
+        if (existingFollowup?.status === "completed") {
+          return {
+            success: true,
+            duplicate: true,
+            messageId: existingFollowup.messageId,
+            providerMessageId: existingFollowup.providerMessageId,
+          };
+        }
+        return {
+          success: false,
+          duplicate: true,
+          errorCode: "REQUEST_IN_PROGRESS",
+          error: "A reply with this idempotency key is already being processed",
+        };
+      }
+
+      const metadata = (ticket.metadata || {}) as Record<string, unknown>;
+      let recipientName =
+        typeof metadata.requesterName === "string" && metadata.requesterName.trim()
+          ? metadata.requesterName.trim()
+          : "there";
+
+      // Resolve recipient email — prefer contact record, then ticket metadata, then linked conversation metadata
+      let to: string | undefined;
+      let linkedConversation: any = null;
+      if (ticket.contactId) {
+        const contact = await Contact.findOne({
+          _id: ticket.contactId,
+          organizationId,
         })
           .select("name email")
           .lean();
-        to = contact?.email || undefined;
-        if (recipientName === "there" && contact?.name) {
+        to = contact?.email?.trim().toLowerCase() || undefined;
+        if (contact?.name) {
           recipientName = contact.name;
         }
       }
-    }
 
-    if (!to || to === "anonymous@temp.local") {
-      logger.error(`[ChannelService.sendTicketFollowup] No recipient email for ticket ${ticketId}`);
-      return;
-    }
+      if (!to && typeof metadata.requesterEmail === "string") {
+        to = metadata.requesterEmail.trim().toLowerCase();
+      }
 
-    // Find the org's active email channel
-    let emailChannel = await Channel.findOne({
-      organizationId,
-      type: "email",
-      isActive: true,
-    }).lean();
+      if (ticket.conversationId) {
+        linkedConversation = await Conversation.findOne({
+          _id: ticket.conversationId,
+          organizationId,
+        })
+          .select("sessionId metadata.senderName metadata.senderEmail")
+          .lean();
 
-    // Dev fallback: auto-create a mailhog channel if none exists
-    if (!emailChannel && config.email.provider === "mailhog") {
-      emailChannel = (await Channel.create({
+        if (!linkedConversation) {
+          throw new Error("Linked conversation not found");
+        }
+        if (!to && typeof linkedConversation.metadata?.senderEmail === "string") {
+          to = linkedConversation.metadata.senderEmail.trim().toLowerCase();
+        }
+        if (
+          recipientName === "there" &&
+          typeof linkedConversation.metadata?.senderName === "string" &&
+          linkedConversation.metadata.senderName.trim()
+        ) {
+          recipientName = linkedConversation.metadata.senderName.trim();
+        }
+
+        if (!to && linkedConversation.sessionId) {
+          const contact = await Contact.findOne({
+            organizationId,
+            sessionId: linkedConversation.sessionId,
+          })
+            .select("name email")
+            .lean();
+          to = contact?.email?.trim().toLowerCase() || undefined;
+          if (recipientName === "there" && contact?.name) {
+            recipientName = contact.name;
+          }
+        }
+      }
+
+      const validEmailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!to || to === "anonymous@temp.local" || !validEmailPattern.test(to)) {
+        await releaseReservation();
+        logger.error(`[ChannelService.sendTicketFollowup] Invalid recipient email for ticket ${ticketId}`);
+        return {
+          success: false,
+          errorCode: "INVALID_RECIPIENT",
+          error: "A valid recipient email address is required",
+        };
+      }
+
+      // Find the org's active email channel
+      let emailChannel = await Channel.findOne({
         organizationId,
         type: "email",
-        name: "Local Dev Email Channel",
         isActive: true,
-        config: {
-          email: {
-            address: "support@localhost.local",
-            addresses: ["support@localhost.local"],
-            domain: "localhost.local",
-            verificationStatus: "verified",
-            dnsRecords: [],
+      }).lean();
+
+      // Dev fallback: auto-create a mailhog channel if none exists
+      if (!emailChannel && config.email.provider === "mailhog") {
+        emailChannel = (await Channel.create({
+          organizationId,
+          type: "email",
+          name: "Local Dev Email Channel",
+          isActive: true,
+          config: {
+            email: {
+              address: "support@localhost.local",
+              addresses: ["support@localhost.local"],
+              domain: "localhost.local",
+              verificationStatus: "verified",
+              dnsRecords: [],
+            },
           },
-        },
-      })) as any;
-    }
+        })) as any;
+      }
 
-    if (!emailChannel) {
-      logger.error(`[ChannelService.sendTicketFollowup] No active email channel for org ${organizationId}`);
-      return;
-    }
+      if (!emailChannel) {
+        await releaseReservation();
+        logger.error(`[ChannelService.sendTicketFollowup] No active email channel for org ${organizationId}`);
+        return {
+          success: false,
+          errorCode: "EMAIL_CHANNEL_NOT_FOUND",
+          error: "No active email channel is configured",
+        };
+      }
 
-    // Render the ticket lifecycle HTML email template
-    let emailHtml: string | undefined;
-    let emailSubject: string | undefined;
-    try {
-      const emailObj = await buildTicketLifecycleEmail("updated", {
-        name: recipientName,
-        ticketNumber: ticket.ticketNumber,
-        title: ticket.title,
-        status: String(ticket.status).replace(/_/g, " "),
-        priority: ticket.priority,
-        updateSummary: content,
-      });
-      emailHtml = emailObj.html;
-      emailSubject = emailObj.subject;
-    } catch (err: any) {
-      logger.error("[ChannelService.sendTicketFollowup] Failed to build email template:", err.message);
-    }
-
-    await this.sendViaChannel(organizationId, emailChannel._id.toString(), {
-      to,
-      subject: emailSubject || `Re: ${ticket.title}`,
-      body: content,
-      html: emailHtml,
-    });
-
-    logger.info("[ChannelService.sendTicketFollowup] Ticket reply sent via email", {
-      ticketId,
-      ticketNumber: ticket.ticketNumber,
-      to,
-    });
-
-    // Save reply message and update conversation timeline to show the message and bump recents sorting
-    if (ticket.conversationId) {
+      // Render the ticket lifecycle HTML email template
+      let emailHtml: string | undefined;
+      let emailSubject: string | undefined;
       try {
-        const msg = new Message({
+        const emailObj = await buildTicketLifecycleEmail("updated", {
+          name: recipientName,
+          ticketNumber: ticket.ticketNumber,
+          title: ticket.title,
+          status: String(ticket.status).replace(/_/g, " "),
+          priority: ticket.priority,
+          updateSummary: content,
+        });
+        emailHtml = emailObj.html;
+        emailSubject = emailObj.subject;
+      } catch (err: any) {
+        logger.error("[ChannelService.sendTicketFollowup] Failed to build email template:", err.message);
+      }
+
+      let sendResult: { messageId?: string };
+      try {
+        sendResult = await this.sendViaChannel(organizationId, emailChannel._id.toString(), {
+          to,
+          subject: emailSubject || `Re: ${ticket.title}`,
+          body: content,
+          html: emailHtml,
+        });
+        emailSent = true;
+      } catch (err: any) {
+        await releaseReservation();
+        logger.error("[ChannelService.sendTicketFollowup] Failed to send ticket reply", {
+          ticketId,
+          to,
+          error: err.message,
+        });
+        return {
+          success: false,
+          errorCode: "EMAIL_SEND_FAILED",
+          error: err.message || "Failed to send ticket reply",
+        };
+      }
+
+      logger.info("[ChannelService.sendTicketFollowup] Ticket reply sent via email", {
+        ticketId,
+        ticketNumber: ticket.ticketNumber,
+        to,
+      });
+
+      let msg: InstanceType<typeof Message> | undefined;
+      if (ticket.conversationId) {
+        msg = await Message.create({
           organizationId,
           conversationId: ticket.conversationId,
           senderId: agentUser?.userId || "system",
@@ -693,50 +818,101 @@ export class ChannelService {
             source: "web",
             senderName: agentUser?.name || "Agent",
             senderEmail: agentUser?.email || "",
-          },
-        });
-        await msg.save();
-
-        await Conversation.updateOne(
-          { _id: ticket.conversationId, organizationId },
-          {
-            $set: {
-              status: "open",
-              assignedTo: agentUser?.userId || null,
-            },
-            $addToSet: { participants: agentUser?.userId },
-            $currentDate: { updatedAt: true },
-          },
-        );
-
-        // Emit real-time message event to conversation room
-        socketService.emitToConversation(ticket.conversationId.toString(), "new_message", {
-          conversationId: ticket.conversationId.toString(),
-          message: {
-            _id: msg._id,
-            senderId: msg.senderId,
-            content: msg.content,
-            type: msg.type,
-            metadata: msg.metadata,
-            createdAt: msg.createdAt,
+            ticketId,
+            ticketFollowupIdempotencyKey: keyHash,
+            providerMessageId: sendResult.messageId,
           },
         });
 
-        // Broadcast to the whole organization so lists refresh in real-time
-        socketService.emitToOrg(organizationId, "status_updated", {
-          conversationId: ticket.conversationId.toString(),
-          status: "open",
-        });
+        const conversationUpdate: Record<string, any> = {
+          $set: { status: "open" },
+          $currentDate: { updatedAt: true },
+        };
         if (agentUser?.userId) {
-          socketService.emitToOrg(organizationId, "conversation_assigned", {
+          conversationUpdate.$set.assignedTo = agentUser.userId;
+          conversationUpdate.$addToSet = { participants: agentUser.userId };
+        }
+
+        const updateResult = await Conversation.updateOne(
+          { _id: ticket.conversationId, organizationId },
+          conversationUpdate,
+        );
+        if (updateResult.matchedCount === 0) {
+          throw new Error("Linked conversation not found while saving reply");
+        }
+      }
+
+      const completionResult = await Ticket.updateOne(
+        { _id: ticketId, organizationId, [`${followupPath}.status`]: "processing" },
+        {
+          $set: {
+            [`${followupPath}.status`]: "completed",
+            [`${followupPath}.completedAt`]: new Date(),
+            [`${followupPath}.messageId`]: msg?._id.toString(),
+            [`${followupPath}.providerMessageId`]: sendResult.messageId,
+          },
+        },
+      );
+      if (completionResult.modifiedCount !== 1) {
+        throw new Error("Failed to complete the idempotent ticket reply record");
+      }
+
+      // Emit only after the message and conversation updates are persisted.
+      if (ticket.conversationId && msg) {
+        try {
+          socketService.emitToConversation(ticket.conversationId.toString(), "new_message", {
             conversationId: ticket.conversationId.toString(),
-            agentId: agentUser.userId,
-            agentName: agentUser.name,
+            message: {
+              _id: msg._id,
+              senderId: msg.senderId,
+              content: msg.content,
+              type: msg.type,
+              metadata: msg.metadata,
+              createdAt: msg.createdAt,
+            },
+          });
+
+          socketService.emitToOrg(organizationId, "status_updated", {
+            conversationId: ticket.conversationId.toString(),
+            status: "open",
+          });
+          if (agentUser?.userId) {
+            socketService.emitToOrg(organizationId, "conversation_assigned", {
+              conversationId: ticket.conversationId.toString(),
+              agentId: agentUser.userId,
+              agentName: agentUser.name,
+            });
+          }
+        } catch (err: any) {
+          logger.error("[ChannelService.sendTicketFollowup] Failed to emit conversation updates", {
+            ticketId,
+            conversationId: ticket.conversationId.toString(),
+            error: err.message,
           });
         }
-      } catch (err: any) {
-        logger.error(`[sendTicketFollowup] Failed to update conversation state: ${err.message}`);
       }
+
+      return {
+        success: true,
+        messageId: msg?._id.toString(),
+        providerMessageId: sendResult.messageId,
+      };
+    } catch (err: any) {
+      if (!emailSent) {
+        await releaseReservation();
+      }
+      logger.error("[ChannelService.sendTicketFollowup] Failed to persist ticket reply", {
+        ticketId,
+        emailSent,
+        error: err.message,
+      });
+      return {
+        success: false,
+        errorCode: "DATABASE_ERROR",
+        error: emailSent
+          ? "The email was sent, but the reply could not be fully persisted"
+          : err.message || "Failed to process ticket reply",
+      };
     }
   }
 }

@@ -111,6 +111,111 @@ function statusFromComposio(status: string, disabled: boolean) {
 }
 
 export class IntegrationsService {
+  /**
+   * Discover Composio tools available to the existing AI agent.
+   * Workspace policy and active connected accounts are resolved here so the
+   * agent never receives a tool it is not permitted to call.
+   */
+  async discoverAgentTools(organizationId: string) {
+    if (!composioAdapter.isAvailable()) return [];
+
+    const [connections, policies] = await Promise.all([
+      IntegrationConnection.find({
+        organizationId,
+        status: "active",
+      })
+        .select("+composioUserId")
+        .sort({ updatedAt: -1 }),
+      IntegrationPolicy.find({ organizationId, enabled: true }).lean(),
+    ]);
+
+    const policyByToolkit = new Map(
+      policies.map((policy) => [policy.toolkitSlug, policy]),
+    );
+    const selectedToolkits = new Set<string>();
+    const discovered = new Map<string, Record<string, unknown>>();
+
+    // A session can bind one account per toolkit. If multiple operators have
+    // connected the same toolkit, use the most recently updated active one.
+    for (const connection of connections) {
+      if (selectedToolkits.has(connection.toolkitSlug)) continue;
+
+      const policy = policyByToolkit.get(connection.toolkitSlug);
+      if (!policy || policy.allowedTools.length === 0) continue;
+
+      const toolkit = await resolvedToolkit(connection.toolkitSlug);
+      if (!toolkit) continue;
+
+      const allowedTools = policy.allowedTools.filter((entry) => {
+        const catalogTool = toolkit.tools.find(
+          (tool) => tool.slug === entry.slug,
+        );
+        return catalogTool?.risk === entry.risk;
+      });
+      if (allowedTools.length === 0) continue;
+
+      try {
+        const tools = await composioAdapter.sessionTools({
+          composioUserId: connection.composioUserId,
+          toolkitSlug: connection.toolkitSlug,
+          connectedAccountId: connection.connectedAccountId,
+          allowedToolSlugs: allowedTools.map((tool) => tool.slug),
+        });
+        const riskBySlug = new Map(
+          allowedTools.map((tool) => [tool.slug, tool.risk]),
+        );
+
+        for (const tool of tools) {
+          const risk = riskBySlug.get(tool.slug);
+          if (!risk || discovered.has(tool.slug)) continue;
+          discovered.set(tool.slug, {
+            name: tool.slug,
+            displayName: tool.name || tool.slug,
+            description:
+              tool.description ||
+              `Execute ${tool.name || tool.slug} through the connected ${connection.toolkitSlug} integration.`,
+            parameters: tool.inputParameters || {
+              type: "object",
+              properties: {},
+            },
+            connectionId: connection._id.toString(),
+            toolkitSlug: connection.toolkitSlug,
+            risk,
+          });
+        }
+        selectedToolkits.add(connection.toolkitSlug);
+      } catch {
+        // One stale provider connection must not remove tools from other
+        // healthy integrations or interrupt a customer-facing AI response.
+      }
+    }
+
+    return [...discovered.values()];
+  }
+
+  async requestAgentExecution(
+    organizationId: string,
+    input: {
+      connectionId: string;
+      toolSlug: string;
+      arguments: Record<string, unknown>;
+    },
+  ) {
+    const connection = await IntegrationConnection.findOne({
+      _id: input.connectionId,
+      organizationId,
+      status: "active",
+    }).select("createdBy");
+    if (!connection)
+      throw new AppError("Active integration connection not found", 404);
+
+    return this.requestExecution(
+      organizationId,
+      connection.createdBy.toString(),
+      input,
+    );
+  }
+
   async catalog(
     organizationId: string,
     input: { page: number; limit: number; search?: string },

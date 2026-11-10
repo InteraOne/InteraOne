@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
-import { ChevronLeft, ChevronRight, ShieldCheck, Sparkles } from "lucide-react";
+import { Boxes, ChevronLeft, ChevronRight, ShieldCheck } from "lucide-react";
 import { Alert, AlertDescription } from "@/shared/ui/alert";
+import { Loader } from "@/shared/ui/loader";
 import {
   useComposioCatalog,
   useComposioConnections,
@@ -49,16 +50,8 @@ export function ComposioIntegrations({ query = "" }: { query?: string }) {
 
   if (catalog.isLoading || connections.isLoading) {
     return (
-      <div className="overflow-hidden rounded-2xl border border-border/70 bg-card shadow-sm">
-        <div className="h-32 animate-pulse bg-muted/35" />
-        <div className="grid gap-4 p-5 sm:grid-cols-2">
-          {[0, 1, 2, 3].map((item) => (
-            <div
-              key={item}
-              className="h-40 animate-pulse rounded-xl bg-muted/35"
-            />
-          ))}
-        </div>
+      <div className="flex min-h-64 items-center justify-center">
+        <Loader size="md" />
       </div>
     );
   }
@@ -88,16 +81,14 @@ export function ComposioIntegrations({ query = "" }: { query?: string }) {
         </Alert>
       )}
 
-      <div className="flex items-end justify-between gap-4 pt-2">
+      <div className="flex items-end justify-between gap-4 border-b border-border/70 pb-3 pt-1">
         <div>
           <div className="flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-primary" />
-            <h3 className="font-semibold tracking-tight">
-              Composio connections
-            </h3>
+            <Boxes className="h-4 w-4 text-primary" />
+            <h3 className="font-semibold tracking-tight">Agent tool catalog</h3>
           </div>
           <p className="mt-0.5 text-sm text-muted-foreground">
-            Connect popular tools and choose the actions InteraOne can perform.
+            Connect an app, then grant only the actions your agents may use.
           </p>
         </div>
         <span className="hidden text-xs text-muted-foreground sm:inline">
@@ -116,11 +107,11 @@ export function ComposioIntegrations({ query = "" }: { query?: string }) {
               <Link
                 key={toolkit.slug}
                 to={`/dashboard/integrations/composio/${toolkit.slug}`}
-                className={`group relative overflow-hidden rounded-xl border bg-card p-4 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${connection?.status === "active" ? "border-emerald-500/25" : "border-border/70 hover:border-primary/30"}`}
+                className={`group relative overflow-hidden rounded-lg border bg-card p-4 transition-colors hover:bg-muted/[0.16] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${connection?.status === "active" ? "border-emerald-500/30" : "border-border/70 hover:border-primary/30"}`}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-3">
-                    <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-border/60 bg-background p-2 shadow-xs">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-border/60 bg-background p-2 shadow-xs">
                       <img
                         src={
                           toolkit.logo ||
@@ -142,7 +133,7 @@ export function ComposioIntegrations({ query = "" }: { query?: string }) {
                     </div>
                   </div>
                   <span
-                    className={`inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-[10px] font-semibold ${connection?.status === "active" ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : connection?.status === "pending" ? "bg-amber-500/10 text-amber-700 dark:text-amber-300" : "bg-muted text-muted-foreground"}`}
+                    className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-[10px] font-semibold ${connection?.status === "active" ? "border-emerald-500/20 bg-emerald-500/[0.07] text-emerald-700 dark:text-emerald-300" : connection?.status === "pending" ? "border-amber-500/20 bg-amber-500/[0.07] text-amber-700 dark:text-amber-300" : "border-border/70 bg-muted/30 text-muted-foreground"}`}
                   >
                     <span
                       className={`h-1.5 w-1.5 rounded-full ${connection?.status === "active" ? "bg-emerald-500" : connection?.status === "pending" ? "bg-amber-500" : "bg-muted-foreground/40"}`}
@@ -167,9 +158,7 @@ export function ComposioIntegrations({ query = "" }: { query?: string }) {
                     <ShieldCheck className="h-3.5 w-3.5" />
                     {toolkit.toolsCount} tools
                   </span>
-                  <span
-                    className={`flex items-center rounded-md px-2 py-1 font-semibold ${connection?.status === "active" ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "bg-primary/10 text-primary"}`}
-                  >
+                  <span className="flex items-center font-semibold text-foreground">
                     {connection?.status === "active" ? "Manage" : "Connect"}
                     <ChevronRight className="ml-0.5 h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
                   </span>

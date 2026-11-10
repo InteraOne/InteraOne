@@ -1015,7 +1015,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="fixed inset-0 overflow-hidden bg-background">
       <div className="flex h-screen overflow-hidden">
         {!isContentFullscreen && (
           <aside

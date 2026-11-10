@@ -1,4 +1,5 @@
 import { Tool, ToolFilterOptions } from "../agent.types";
+import { getComposioTools } from "./composio.tools";
 
 const registry = new Map<string, Tool>();
 
@@ -17,7 +18,9 @@ export function getAllTools(): Tool[] {
 }
 
 /** Returns dynamically filtered tools based on conversation context/configuration */
-export function getToolsForContext(options: ToolFilterOptions): Tool[] {
+export async function getToolsForContext(
+  options: ToolFilterOptions,
+): Promise<Tool[]> {
   let tools = [...registry.values()];
 
   // If escalation is disabled, exclude escalate_to_human tool completely
@@ -30,6 +33,15 @@ export function getToolsForContext(options: ToolFilterOptions): Tool[] {
     tools = tools.filter(
       (tool) => tool.name !== "verify_email_otp" && tool.name !== "send_email",
     );
+  }
+
+  const composioTools = await getComposioTools(options.organizationId);
+  const names = new Set(tools.map((tool) => tool.name));
+  for (const tool of composioTools) {
+    if (!names.has(tool.name)) {
+      tools.push(tool);
+      names.add(tool.name);
+    }
   }
 
   return tools;

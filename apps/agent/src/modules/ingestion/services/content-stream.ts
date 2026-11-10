@@ -1,4 +1,8 @@
-import { FetchedPage, crawlPages, fetchSinglePage } from "../sources/url.source";
+import {
+  FetchedPage,
+  crawlPages,
+  fetchSinglePage,
+} from "../sources/playwright-crawler";
 import { ContentStreamItem } from "../ingestion.types";
 
 export async function* streamFromText(

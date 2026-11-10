@@ -131,6 +131,11 @@ export const replyToTicket = asyncHandler(async (req: Request, res: Response) =>
   const orgId = getOrgId(req);
   const ticketId = param(req, "ticketId");
   const { content } = req.body;
+  const idempotencyKey = String(req.get("Idempotency-Key") || req.body.idempotencyKey || "").trim();
+
+  if (!idempotencyKey) {
+    return sendError(res, 400, "Idempotency-Key header or idempotencyKey is required");
+  }
 
   // Verify ticket exists and belongs to this org
   const ticket = await service.getTicketById(orgId, ticketId);
@@ -138,10 +143,39 @@ export const replyToTicket = asyncHandler(async (req: Request, res: Response) =>
 
   const user = (req as AuthenticatedRequest).user;
   const userDoc = await User.findById(user.userId).select("name").lean();
-  await ChannelService.sendTicketFollowup(orgId, ticketId, content, {
-    userId: user.userId,
-    name: userDoc?.name || "Agent",
-    email: user.email || "",
-  });
-  sendResponse(res, 200, true, "Reply sent to customer via email", {});
+  const result = await ChannelService.sendTicketFollowup(
+    orgId,
+    ticketId,
+    content,
+    {
+      userId: user.userId,
+      name: userDoc?.name || "Agent",
+      email: user.email || "",
+    },
+    idempotencyKey,
+  );
+
+  if (!result.success) {
+    const statusCode =
+      result.errorCode === "TICKET_NOT_FOUND"
+        ? 404
+        : result.errorCode === "IDEMPOTENCY_CONFLICT" || result.errorCode === "REQUEST_IN_PROGRESS"
+          ? 409
+          : result.errorCode === "INVALID_RECIPIENT"
+            ? 400
+            : result.errorCode === "EMAIL_CHANNEL_NOT_FOUND"
+              ? 409
+              : result.errorCode === "EMAIL_SEND_FAILED"
+                ? 502
+                : 500;
+    return sendError(res, statusCode, result.error || "Failed to send reply");
+  }
+
+  sendResponse(
+    res,
+    200,
+    true,
+    result.duplicate ? "Reply was already processed" : "Reply sent to customer via email",
+    result,
+  );
 });

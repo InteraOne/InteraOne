@@ -23,13 +23,39 @@ export interface IngestionStatusUpdate {
 }
 
 export const InternalApiService = {
+  async getComposioTools(organizationId: string): Promise<any[]> {
+    const { data } = await internalApi.get("/integrations/ai/tools", {
+      params: { organizationId },
+    });
+    return data?.data ?? [];
+  },
+
+  async executeComposioTool(payload: {
+    organizationId: string;
+    connectionId: string;
+    toolSlug: string;
+    arguments: Record<string, unknown>;
+  }): Promise<any> {
+    const { data } = await internalApi.post(
+      "/integrations/ai/tools/execute",
+      payload,
+    );
+    return data?.data ?? data;
+  },
+
   /**
    * Fetch sync metadata/info for a document
    */
-  async getSyncInfo(documentId: string, organizationId: string): Promise<SyncInfoResponse | null> {
-    const { data } = await internalApi.get(`/knowledge/ai/${documentId}/sync-info`, {
-      params: { organizationId },
-    });
+  async getSyncInfo(
+    documentId: string,
+    organizationId: string,
+  ): Promise<SyncInfoResponse | null> {
+    const { data } = await internalApi.get(
+      `/knowledge/ai/${documentId}/sync-info`,
+      {
+        params: { organizationId },
+      },
+    );
     return data?.data ?? null;
   },
 
@@ -72,9 +98,12 @@ export const InternalApiService = {
     conversationId: string,
     organizationId: string,
   ): Promise<any> {
-    const { data } = await internalApi.get(`/conversations/ai/${conversationId}/gate`, {
-      params: { organizationId },
-    });
+    const { data } = await internalApi.get(
+      `/conversations/ai/${conversationId}/gate`,
+      {
+        params: { organizationId },
+      },
+    );
     return data?.data?.gate ?? null;
   },
 
@@ -93,7 +122,10 @@ export const InternalApiService = {
       usage?: any;
     },
   ): Promise<void> {
-    await internalApi.post(`/conversations/ai/${conversationId}/agent-runs`, payload);
+    await internalApi.post(
+      `/conversations/ai/${conversationId}/agent-runs`,
+      payload,
+    );
   },
 
   /**
@@ -107,6 +139,9 @@ export const InternalApiService = {
       unassigned?: boolean;
     },
   ): Promise<void> {
-    await internalApi.post(`/conversations/ai/${conversationId}/escalate`, payload);
+    await internalApi.post(
+      `/conversations/ai/${conversationId}/escalate`,
+      payload,
+    );
   },
 };

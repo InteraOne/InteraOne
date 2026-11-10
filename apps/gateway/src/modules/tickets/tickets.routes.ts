@@ -333,6 +333,11 @@ router.post(
  *         required: true
  *         schema:
  *           type: string
+ *       - in: header
+ *         name: Idempotency-Key
+ *         required: false
+ *         schema:
+ *           type: string
  *     requestBody:
  *       required: true
  *       content:
@@ -344,11 +349,16 @@ router.post(
  *             properties:
  *               content:
  *                 type: string
+ *               idempotencyKey:
+ *                 type: string
+ *                 description: Alternative to the Idempotency-Key header
  *     responses:
  *       200:
  *         description: Reply sent to customer via email
  *       404:
  *         description: Ticket not found
+ *       409:
+ *         description: Idempotency conflict or no active email channel
  */
 router.post(
   "/:ticketId/reply",
