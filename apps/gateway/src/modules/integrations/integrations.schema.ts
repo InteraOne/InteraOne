@@ -3,6 +3,15 @@ import Joi from "joi";
 const slug = Joi.string().trim().min(1).max(160);
 
 export const integrationsSchema = {
+  agentDiscoveryQuery: Joi.object({
+    organizationId: Joi.string().hex().length(24).required(),
+  }),
+  agentExecute: Joi.object({
+    organizationId: Joi.string().hex().length(24).required(),
+    connectionId: Joi.string().hex().length(24).required(),
+    toolSlug: slug.required(),
+    arguments: Joi.object().default({}).required(),
+  }),
   catalogQuery: Joi.object({
     page: Joi.number().integer().min(1).max(10000).optional(),
     limit: Joi.number().integer().min(1).max(48).optional(),

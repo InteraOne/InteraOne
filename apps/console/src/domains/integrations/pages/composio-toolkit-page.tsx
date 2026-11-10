@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { Alert, AlertDescription } from "@/shared/ui/alert";
 import { Button } from "@/shared/ui/button";
+import { Loader } from "@/shared/ui/loader";
 import {
   useComposioConnections,
   useComposioToolkit,
@@ -37,13 +38,31 @@ export function ComposioToolkitPage() {
   const [toolFilter, setToolFilter] = useState<"all" | "read" | "protected">(
     "all",
   );
+  const [toolSelectionDraft, setToolSelectionDraft] = useState<{
+    scope: string;
+    slugs: Set<string>;
+  } | null>(null);
 
   const toolkit = toolkitQuery.data?.toolkit;
+  const toolkitTools = Array.isArray(toolkit?.tools) ? toolkit.tools : [];
+  const policyAllowedTools = Array.isArray(toolkit?.policy?.allowedTools)
+    ? toolkit.policy.allowedTools
+    : [];
+  const policySelectionKey = policyAllowedTools
+    .map((tool) => tool.slug)
+    .sort()
+    .join("|");
+  const toolSelectionScope = `${toolkitSlug}:${policySelectionKey}`;
+  const savedToolSlugs = new Set(policyAllowedTools.map((tool) => tool.slug));
+  const selectedToolSlugs =
+    toolSelectionDraft?.scope === toolSelectionScope
+      ? toolSelectionDraft.slugs
+      : savedToolSlugs;
   const connection = connections.data?.find(
     (item) => item.toolkitSlug === toolkitSlug,
   );
   const normalizedToolQuery = toolQuery.trim().toLowerCase();
-  const visibleTools = (toolkit?.tools ?? []).filter((tool) => {
+  const visibleTools = toolkitTools.filter((tool) => {
     const matchesFilter =
       toolFilter === "all" ||
       (toolFilter === "read" ? tool.risk === "read" : tool.risk !== "read");
@@ -68,7 +87,7 @@ export function ComposioToolkitPage() {
   if (toolkitQuery.isLoading || connections.isLoading) {
     return (
       <div className="flex min-h-64 items-center justify-center">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        <Loader size="md" />
       </div>
     );
   }
@@ -102,14 +121,24 @@ export function ComposioToolkitPage() {
     );
   }
 
-  const enabledToolSlugs = new Set(
-    toolkit.policy.allowedTools.map((tool) => tool.slug),
-  );
-  const updateTool = (slug: string, enabled: boolean) => {
-    const allowedTools = toolkit.tools
-      .filter((tool) =>
-        tool.slug === slug ? enabled : enabledToolSlugs.has(tool.slug),
-      )
+  const hasPolicyChanges =
+    selectedToolSlugs.size !== savedToolSlugs.size ||
+    [...selectedToolSlugs].some((slug) => !savedToolSlugs.has(slug));
+
+  const updateToolSelection = (slug: string, enabled: boolean) => {
+    setToolSelectionDraft((current) => {
+      const currentSlugs =
+        current?.scope === toolSelectionScope ? current.slugs : savedToolSlugs;
+      const next = new Set(currentSlugs);
+      if (enabled) next.add(slug);
+      else next.delete(slug);
+      return { scope: toolSelectionScope, slugs: next };
+    });
+  };
+
+  const saveToolSelection = () => {
+    const allowedTools = toolkitTools
+      .filter((tool) => selectedToolSlugs.has(tool.slug))
       .map(({ slug: toolSlug, risk }) => ({ slug: toolSlug, risk }));
     updatePolicy.mutate({
       toolkit: toolkit.slug,
@@ -118,7 +147,7 @@ export function ComposioToolkitPage() {
   };
 
   return (
-    <div className="mx-auto max-w-6xl space-y-5 pb-10">
+    <div className="mx-auto max-w-6xl space-y-5">
       <Button asChild variant="ghost" size="sm" className="-ml-2">
         <Link to="/dashboard/integrations">
           <ArrowLeft className="mr-2 h-4 w-4" />
@@ -126,11 +155,10 @@ export function ComposioToolkitPage() {
         </Link>
       </Button>
 
-      <section className="relative overflow-hidden rounded-2xl border border-border/70 bg-card p-5 shadow-sm sm:p-6">
-        <div className="pointer-events-none absolute -right-16 -top-24 h-64 w-64 rounded-full bg-primary/10 blur-3xl" />
-        <div className="relative flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+      <section className="overflow-hidden rounded-xl border border-border/70 bg-card shadow-sm">
+        <div className="flex flex-col gap-5 p-5 sm:p-6 lg:flex-row lg:items-start lg:justify-between">
           <div className="flex items-start gap-3">
-            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-border/70 bg-background p-2.5 shadow-sm">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-border/70 bg-background p-2 shadow-xs">
               <img
                 src={
                   toolkit.logo ||
@@ -142,7 +170,7 @@ export function ComposioToolkitPage() {
             </div>
             <div>
               <div className="flex flex-wrap items-center gap-2">
-                <h1 className="text-2xl font-semibold tracking-tight">
+                <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">
                   {toolkit.name}
                 </h1>
                 <span
@@ -198,7 +226,8 @@ export function ComposioToolkitPage() {
                 disabled={
                   !toolkitQuery.data?.available ||
                   connect.isPending ||
-                  enabledToolSlugs.size === 0
+                  selectedToolSlugs.size === 0 ||
+                  hasPolicyChanges
                 }
                 onClick={() => connect.mutate(toolkit.slug)}
               >
@@ -212,7 +241,7 @@ export function ComposioToolkitPage() {
         </div>
 
         {!toolkitQuery.data?.available && (
-          <Alert className="mt-4">
+          <Alert className="mx-5 mb-5 sm:mx-6 sm:mb-6">
             <AlertDescription>
               {toolkitQuery.data?.enabled
                 ? "Composio is enabled but its server API key is not configured."
@@ -221,26 +250,34 @@ export function ComposioToolkitPage() {
           </Alert>
         )}
         {connection?.lastError && (
-          <Alert variant="destructive" className="mt-4">
+          <Alert variant="destructive" className="mx-5 mb-5 sm:mx-6 sm:mb-6">
             <AlertDescription>{connection.lastError}</AlertDescription>
+          </Alert>
+        )}
+        {updatePolicy.error && (
+          <Alert variant="destructive" className="mx-5 mb-5 sm:mx-6 sm:mb-6">
+            <AlertDescription>
+              {updatePolicy.error.message ||
+                "Could not update the selected agent tools."}
+            </AlertDescription>
           </Alert>
         )}
       </section>
 
-      <div className="grid grid-cols-3 overflow-hidden rounded-xl border border-border/70 bg-card shadow-sm">
+      <div className="grid grid-cols-3 overflow-hidden rounded-lg border border-border/70 bg-card">
         <div className="border-r border-border/70 p-4">
-          <p className="text-xl font-semibold">{enabledToolSlugs.size}</p>
+          <p className="text-xl font-semibold">{selectedToolSlugs.size}</p>
           <p className="mt-0.5 text-xs text-muted-foreground">Tools enabled</p>
         </div>
         <div className="border-r border-border/70 p-4">
           <p className="text-xl font-semibold">
-            {toolkit.tools.filter((tool) => tool.risk === "read").length}
+            {toolkitTools.filter((tool) => tool.risk === "read").length}
           </p>
           <p className="mt-0.5 text-xs text-muted-foreground">Read actions</p>
         </div>
         <div className="p-4">
           <p className="text-xl font-semibold">
-            {toolkit.tools.filter((tool) => tool.risk !== "read").length}
+            {toolkitTools.filter((tool) => tool.risk !== "read").length}
           </p>
           <p className="mt-0.5 text-xs text-muted-foreground">
             Protected actions
@@ -248,7 +285,7 @@ export function ComposioToolkitPage() {
         </div>
       </div>
 
-      <section className="overflow-hidden rounded-2xl border border-border/70 bg-card shadow-sm">
+      <section className="overflow-hidden rounded-xl border border-border/70 bg-card shadow-sm">
         <div className="flex flex-col gap-4 border-b border-border/70 p-5 sm:p-6">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -264,9 +301,35 @@ export function ComposioToolkitPage() {
                 </div>
               </div>
             </div>
-            <span className="w-fit rounded-full bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">
-              {enabledToolSlugs.size} of {toolkit.tools.length} enabled
-            </span>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="w-fit rounded-full bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">
+                {selectedToolSlugs.size} of {toolkitTools.length} selected
+              </span>
+              {hasPolicyChanges && (
+                <>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={updatePolicy.isPending}
+                    onClick={() => setToolSelectionDraft(null)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={updatePolicy.isPending}
+                    onClick={saveToolSelection}
+                  >
+                    {updatePolicy.isPending && (
+                      <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+                    )}
+                    Save tools
+                  </Button>
+                </>
+              )}
+            </div>
           </div>
 
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -275,7 +338,7 @@ export function ComposioToolkitPage() {
               <input
                 value={toolQuery}
                 onChange={(event) => setToolQuery(event.target.value)}
-                placeholder={`Search ${toolkit.tools.length} tools...`}
+                placeholder={`Search ${toolkitTools.length} tools...`}
                 className="h-10 w-full rounded-lg border border-border/70 bg-background pl-9 pr-3 text-sm outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/10"
               />
             </div>
@@ -293,29 +356,31 @@ export function ComposioToolkitPage() {
             </div>
           </div>
           <p className="text-xs text-muted-foreground">
-            Showing {visibleTools.length} of {toolkit.tools.length} actions
+            Showing {visibleTools.length} of {toolkitTools.length} actions
             synced from Composio.
           </p>
         </div>
 
-        <div className="grid gap-3 p-4 sm:p-5 lg:grid-cols-2">
+        <div className="grid items-start gap-3 p-4 [grid-auto-rows:min-content] sm:p-5 lg:grid-cols-2">
           {visibleTools.map((tool) => (
-            <label
+            <button
               key={tool.slug}
-              className={`group flex cursor-pointer items-start gap-3 rounded-xl border p-4 transition-all ${enabledToolSlugs.has(tool.slug) ? "border-primary/25 bg-primary/[0.035]" : "border-border/70 bg-background hover:border-border"}`}
+              type="button"
+              role="checkbox"
+              aria-checked={selectedToolSlugs.has(tool.slug)}
+              disabled={!toolkitQuery.data?.available}
+              onClick={() =>
+                updateToolSelection(
+                  tool.slug,
+                  !selectedToolSlugs.has(tool.slug),
+                )
+              }
+              className={`group flex min-h-0 w-full cursor-pointer items-start gap-3 self-start rounded-xl border p-4 text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 ${selectedToolSlugs.has(tool.slug) ? "border-primary/25 bg-primary/[0.035]" : "border-border/70 bg-background hover:border-border"}`}
             >
-              <input
-                type="checkbox"
-                className="peer sr-only"
-                checked={enabledToolSlugs.has(tool.slug)}
-                disabled={
-                  !toolkitQuery.data?.available || updatePolicy.isPending
-                }
-                onChange={(event) =>
-                  updateTool(tool.slug, event.target.checked)
-                }
-              />
-              <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border border-border bg-background text-transparent transition-colors peer-checked:border-primary peer-checked:bg-primary peer-checked:text-primary-foreground peer-focus-visible:ring-2 peer-focus-visible:ring-ring peer-disabled:opacity-50">
+              <span
+                aria-hidden="true"
+                className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-colors ${selectedToolSlugs.has(tool.slug) ? "border-primary bg-primary text-primary-foreground" : "border-border bg-background text-transparent"}`}
+              >
                 <Check className="h-3.5 w-3.5" />
               </span>
               <span className="min-w-0 flex-1">
@@ -332,7 +397,7 @@ export function ComposioToolkitPage() {
                     {tool.risk === "read" ? "Read only" : "Approval required"}
                   </span>
                 </span>
-                <span className="mt-2 block line-clamp-3 text-xs leading-5 text-muted-foreground">
+                <span className="mt-2 block max-h-[3.75rem] overflow-hidden text-xs leading-5 text-muted-foreground [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:3]">
                   {tool.description}
                 </span>
                 <code className="mt-3 flex max-w-full w-fit items-center gap-1 overflow-hidden rounded bg-muted/60 px-2 py-1 text-[10px] text-muted-foreground">
@@ -340,7 +405,7 @@ export function ComposioToolkitPage() {
                   <span className="truncate">{tool.slug}</span>
                 </code>
               </span>
-            </label>
+            </button>
           ))}
           {visibleTools.length === 0 && (
             <div className="col-span-full rounded-xl border border-dashed border-border/70 px-4 py-10 text-center text-sm text-muted-foreground">

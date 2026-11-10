@@ -7,7 +7,10 @@ import { LLMMessage } from "../../../infrastructure/providers/types/ai.types";
 import { publishResponse } from "../../../infrastructure/queue/reply.queue";
 import { AIJobData } from "../chat.types";
 import { getToolsForContext } from "../../agents/tools";
-import { publishStreamWithSeq, waitForPendingStream } from "../services/stream.service";
+import {
+  publishStreamWithSeq,
+  waitForPendingStream,
+} from "../services/stream.service";
 import { InternalApiService } from "../../../infrastructure/api/internal-api.service";
 import { redactOtpForLog } from "../utils/chat.utils";
 import { makeTimer } from "../../../shared/timing";
@@ -103,6 +106,14 @@ export async function runPipeline(job: AIJobData): Promise<void> {
       // Capabilities are resolved from the registry — no string matching
       const provider = ProviderFactory.getLLMProvider();
       const capabilities = await provider.getCapabilities();
+      const tools = capabilities.supportsTools
+        ? await getToolsForContext({
+            fallbackToAgent: job.fallbackToAgent,
+            channel,
+            organizationId: job.organizationId,
+            conversationId: job.conversationId,
+          })
+        : [];
 
       console.time(t("llm"));
       const llmStart = performance.now();
@@ -110,12 +121,7 @@ export async function runPipeline(job: AIJobData): Promise<void> {
 
       // FallbackRouter wraps generation with an ordered provider fallback chain
       const generated = await FallbackRouter.generate(messages, {
-        tools: capabilities.supportsTools
-          ? getToolsForContext({
-            fallbackToAgent: job.fallbackToAgent,
-            channel: channel,
-          })
-          : [],
+        tools,
         toolContext: {
           organizationId: job.organizationId,
           conversationId: job.conversationId,
@@ -123,24 +129,24 @@ export async function runPipeline(job: AIJobData): Promise<void> {
         },
         onStream: capabilities.supportsStreaming
           ? (chunk, isThought = false) => {
-            if (!hasReceivedFirstToken) {
-              hasReceivedFirstToken = true;
-              const ttftPipeline = Date.now() - startTime;
-              const ttftLlm = performance.now() - llmStart;
-              console.log(
-                `[${cid}] ttft: ${ttftPipeline.toFixed(2)}ms (from request) | llm_ttft: ${ttftLlm.toFixed(2)}ms (from LLM start) (isThought=${isThought})`,
+              if (!hasReceivedFirstToken) {
+                hasReceivedFirstToken = true;
+                const ttftPipeline = Date.now() - startTime;
+                const ttftLlm = performance.now() - llmStart;
+                console.log(
+                  `[${cid}] ttft: ${ttftPipeline.toFixed(2)}ms (from request) | llm_ttft: ${ttftLlm.toFixed(2)}ms (from LLM start) (isThought=${isThought})`,
+                );
+              }
+              const publish = publishStreamWithSeq({
+                conversationId,
+                messageId: job.messageId,
+                chunk,
+                isThought,
+              }).catch((err) =>
+                console.error("[Pipeline] Stream publish failed:", err.message),
               );
+              pendingStreamPublishes.push(publish);
             }
-            const publish = publishStreamWithSeq({
-              conversationId,
-              messageId: job.messageId,
-              chunk,
-              isThought,
-            }).catch((err) =>
-              console.error("[Pipeline] Stream publish failed:", err.message),
-            );
-            pendingStreamPublishes.push(publish);
-          }
           : undefined,
         onToolEvent: (event) => {
           const publish = publishStreamWithSeq({
@@ -174,17 +180,18 @@ export async function runPipeline(job: AIJobData): Promise<void> {
           ? " If you need immediate help, I can connect you to a human agent."
           : "");
       await waitForPendingStream(conversationId, job.messageId);
-      await publishResponse({ conversationId, messageId: job.messageId, content: fallback });
+      await publishResponse({
+        conversationId,
+        messageId: job.messageId,
+        content: fallback,
+      });
 
       if (canEscalate) {
         try {
-          await InternalApiService.escalateConversation(
-            conversationId,
-            {
-              organizationId: job.organizationId,
-              reason: "LLM provider error — auto-escalated to human",
-            },
-          );
+          await InternalApiService.escalateConversation(conversationId, {
+            organizationId: job.organizationId,
+            reason: "LLM provider error — auto-escalated to human",
+          });
         } catch (escErr: any) {
           console.error(
             "[Pipeline] Failed to escalate conversation on provider error:",
@@ -195,10 +202,10 @@ export async function runPipeline(job: AIJobData): Promise<void> {
 
       try {
         console.timeEnd(t("llm"));
-      } catch { }
+      } catch {}
       try {
         console.timeEnd(t("agent"));
-      } catch { }
+      } catch {}
       status = "failed";
       error =
         providerErr instanceof Error
@@ -215,7 +222,12 @@ export async function runPipeline(job: AIJobData): Promise<void> {
     // -- 4. Publish regular response ---------------------------------------------
     console.time(t("publish:response"));
     await waitForPendingStream(conversationId, job.messageId);
-    await publishResponse({ conversationId, messageId: job.messageId, content: generatedText, usage });
+    await publishResponse({
+      conversationId,
+      messageId: job.messageId,
+      content: generatedText,
+      usage,
+    });
     console.timeEnd(t("publish:response"));
   } catch (err: any) {
     status = "failed";

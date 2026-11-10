@@ -3,12 +3,27 @@ import {
   authenticate,
   requireRole,
   resolveOrganization,
+  validateAiSecret,
   validateRequest,
 } from "@shared/security/middleware";
 import { IntegrationsController } from "./integrations.controller";
 import { integrationsSchema } from "./integrations.schema";
 
 export const integrationsRouter = Router();
+
+// Existing AI service integration: dynamic discovery + policy-checked execution.
+integrationsRouter.get(
+  "/ai/tools",
+  validateAiSecret,
+  validateRequest(integrationsSchema.agentDiscoveryQuery, "query"),
+  IntegrationsController.agentTools,
+);
+integrationsRouter.post(
+  "/ai/tools/execute",
+  validateAiSecret,
+  validateRequest(integrationsSchema.agentExecute),
+  IntegrationsController.agentExecute,
+);
 
 integrationsRouter.use(authenticate, resolveOrganization, requireRole("admin"));
 integrationsRouter.get(

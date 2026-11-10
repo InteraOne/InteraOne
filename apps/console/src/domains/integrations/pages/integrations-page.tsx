@@ -8,7 +8,6 @@ import {
   RefreshCw,
   Search,
   Settings2,
-  Sparkles,
   Trash2,
   XCircle,
 } from "lucide-react";
@@ -85,28 +84,6 @@ const providers = [
     benefit: "Sync task lists securely",
     icon: GoogleTasksLogo,
   },
-];
-
-const featuredIntegrations = [
-  { slug: "github", name: "GitHub" },
-  { slug: "linear", name: "Linear" },
-  { slug: "jira", name: "Jira" },
-  { slug: "gmail", name: "Gmail" },
-  { slug: "slack", name: "Slack" },
-  { slug: "googlecalendar", name: "Google Calendar" },
-  { slug: "googledrive", name: "Google Drive" },
-  { slug: "googlesheets", name: "Google Sheets" },
-  { slug: "googledocs", name: "Google Docs" },
-  { slug: "notion", name: "Notion" },
-  { slug: "hubspot", name: "HubSpot" },
-  { slug: "zendesk", name: "Zendesk" },
-  { slug: "outlook", name: "Outlook" },
-  { slug: "googlemeet", name: "Google Meet" },
-  { slug: "zoom", name: "Zoom" },
-  { slug: "microsoft_teams", name: "Microsoft Teams" },
-  { slug: "airtable", name: "Airtable" },
-  { slug: "trello", name: "Trello" },
-  { slug: "shopify", name: "Shopify" },
 ];
 
 function ResultBanner({ success, text }: { success: boolean; text: string }) {
@@ -405,86 +382,65 @@ export function IntegrationsPage() {
         ? "task lists"
         : "forms";
   return (
-    <div className="mx-auto max-w-6xl space-y-6 pb-10">
+    <div className="mx-auto max-w-6xl space-y-6">
       <section className="space-y-5" data-tour-id="page-integrations-heading">
-        <div className="relative isolate overflow-hidden px-4 py-8 sm:py-12">
-          <div className="pointer-events-none absolute left-1/2 top-1/2 -z-10 h-72 w-[44rem] -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary/[0.09] blur-3xl" />
-          <div className="pointer-events-none absolute left-[18%] top-24 -z-10 h-40 w-40 rounded-full bg-violet-400/10 blur-3xl" />
-          <div className="pointer-events-none absolute bottom-16 right-[18%] -z-10 h-40 w-40 rounded-full bg-sky-400/10 blur-3xl" />
-
-          <div className="mx-auto flex max-w-3xl flex-col items-center text-center">
-            <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-primary/[0.08] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-primary">
-              <Sparkles className="h-3.5 w-3.5" />
-              Integration marketplace
-            </div>
-            <h1 className="text-3xl font-bold tracking-[-0.035em] sm:text-5xl">
-              Connect every tool your team loves.
-            </h1>
-            <p className="mt-4 max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">
-              Bring your workspace together and let InteraOne safely turn
-              everyday apps into one connected AI workflow.
-            </p>
-
-            <div className="relative mt-8 w-full py-5">
-              <div className="pointer-events-none absolute left-1/2 top-1/2 h-36 w-[85%] -translate-x-1/2 -translate-y-1/2 rounded-full bg-background/80 blur-2xl" />
-              <p className="relative z-10 mb-5 text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-                Works with your favorite tools
+        <header className="space-y-5 border-b border-border/70 pb-5">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                Workspace settings
               </p>
-              <div className="relative z-10 mx-auto flex max-w-2xl flex-wrap items-center justify-center gap-3">
-                {featuredIntegrations.map((integration, index) => (
-                  <div
-                    key={integration.slug}
-                    title={integration.name}
-                    className={`flex h-12 w-12 items-center justify-center rounded-2xl bg-background/80 p-2.5 shadow-[0_10px_30px_-12px_rgba(0,0,0,0.45)] ring-1 ring-border/40 backdrop-blur-xl transition duration-300 hover:-translate-y-1 hover:scale-105 hover:shadow-lg ${index % 4 === 1 ? "sm:-translate-y-1" : index % 4 === 3 ? "sm:translate-y-1" : ""}`}
-                  >
-                    <img
-                      src={`/integration-logos/${integration.slug}.png`}
-                      alt={integration.name}
-                      className="h-7 w-7 object-contain drop-shadow-sm"
-                    />
-                  </div>
-                ))}
-              </div>
+              <h1 className="text-2xl font-semibold tracking-[-0.025em]">
+                Integrations
+              </h1>
+              <p className="mt-1.5 max-w-2xl text-sm leading-6 text-muted-foreground">
+                Connect external services and decide which actions your agents
+                can use.
+              </p>
             </div>
-
-            <div className="mt-5 w-full max-w-2xl">
-              <div className="mb-2 flex items-center justify-between px-1 text-xs">
-                <span className="font-medium">Find an integration</span>
-                <span className="text-muted-foreground">
-                  {connectedCount} direct connections
-                </span>
-              </div>
-              <label className="relative block w-full">
-                <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <input
-                  value={query}
-                  onChange={(event) => setQuery(event.target.value)}
-                  placeholder="Search thousands of integrations..."
-                  className="h-12 w-full rounded-2xl border border-border/70 bg-background/85 pl-11 pr-4 text-sm shadow-[0_12px_35px_-18px_rgba(0,0,0,0.45)] outline-none backdrop-blur-xl transition focus:border-primary/60 focus:ring-4 focus:ring-primary/10"
-                />
-              </label>
-            </div>
+            <p className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
+              <span className="h-2 w-2 rounded-full bg-emerald-500" />
+              <span>
+                <strong className="font-semibold text-foreground">
+                  {connectedCount}
+                </strong>{" "}
+                native provider{connectedCount === 1 ? "" : "s"} connected
+              </span>
+            </p>
           </div>
-        </div>
 
-        <div className="flex flex-wrap items-center gap-2 border-b border-border/70 pb-4">
-          {(
-            [
-              { id: "all", label: "All integrations" },
-              { id: "data", label: "Data & lead sync" },
-              { id: "ai", label: "AI action apps" },
-            ] as const
-          ).map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => setView(item.id)}
-              className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${view === item.id ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
+          <label className="relative block max-w-2xl">
+            <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search integrations by name or capability"
+              className="h-11 w-full rounded-lg border border-border bg-background pl-10 pr-4 text-sm shadow-xs outline-none transition placeholder:text-muted-foreground/70 focus:border-primary/50 focus:ring-2 focus:ring-primary/10"
+            />
+          </label>
+
+          <nav
+            className="flex items-center gap-6 overflow-x-auto"
+            aria-label="Integration categories"
+          >
+            {(
+              [
+                { id: "all", label: "All integrations" },
+                { id: "data", label: "Native connections" },
+                { id: "ai", label: "Agent tools" },
+              ] as const
+            ).map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => setView(item.id)}
+                className={`relative whitespace-nowrap pb-2 text-sm font-medium transition-colors after:absolute after:inset-x-0 after:-bottom-px after:h-0.5 after:rounded-full ${view === item.id ? "text-foreground after:bg-primary" : "text-muted-foreground after:bg-transparent hover:text-foreground"}`}
+              >
+                {item.label}
+              </button>
+            ))}
+          </nav>
+        </header>
 
         {facebookResult === "connected" && (
           <ResultBanner
@@ -542,11 +498,12 @@ export function IntegrationsPage() {
                 </p>
               </div>
               <span className="hidden text-xs text-muted-foreground sm:inline">
-                Native connections
+                {shownProviders.length} provider
+                {shownProviders.length === 1 ? "" : "s"}
               </span>
             </div>
             {shownProviders.length ? (
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="grid gap-3 sm:grid-cols-2">
                 {shownProviders.map((provider) => {
                   const sources = leadSources.filter(
                     (source) => source.provider === provider.id,
@@ -563,11 +520,11 @@ export function IntegrationsPage() {
                           ? "facebook"
                           : "google-forms"
                       }`}
-                      className={`group overflow-hidden rounded-xl border bg-card shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md ${connected ? "border-emerald-500/25" : "border-border/70 hover:border-primary/30"}`}
+                      className={`group overflow-hidden rounded-lg border bg-card transition-colors hover:bg-muted/[0.16] ${connected ? "border-emerald-500/30" : "border-border/70 hover:border-primary/30"}`}
                     >
                       <div className="p-4">
                         <div className="flex items-start justify-between gap-4">
-                          <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-border/60 bg-background p-2 shadow-xs">
+                          <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-border/60 bg-background p-2 shadow-xs">
                             <Icon className="h-full w-full" />
                           </div>
                           <div

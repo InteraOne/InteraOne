@@ -1,4 +1,4 @@
-import { Response } from "express";
+import { Request, Response } from "express";
 import { asyncHandler, sendResponse } from "@shared/core/response";
 import { AuthenticatedRequest } from "@shared/security/middleware/auth";
 import { IntegrationsService } from "./integrations.service";
@@ -8,6 +8,24 @@ const param = (value: string | string[] | undefined): string =>
   Array.isArray(value) ? value[0] : value || "";
 
 export const IntegrationsController = {
+  agentTools: asyncHandler(async (req: Request, res: Response) =>
+    sendResponse(
+      res,
+      200,
+      true,
+      "Agent integration tools discovered",
+      await service.discoverAgentTools(String(req.query.organizationId)),
+    ),
+  ),
+  agentExecute: asyncHandler(async (req: Request, res: Response) =>
+    sendResponse(
+      res,
+      200,
+      true,
+      "Agent integration action handled",
+      await service.requestAgentExecution(req.body.organizationId, req.body),
+    ),
+  ),
   catalog: asyncHandler(async (req: AuthenticatedRequest, res: Response) =>
     sendResponse(
       res,
