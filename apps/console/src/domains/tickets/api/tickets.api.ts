@@ -50,8 +50,12 @@ class TicketsApi {
     return this.updateTicket(ticketId, { status });
   }
 
-  async replyToTicket(ticketId: string, content: string): Promise<void> {
-    return apiClient.post(`/tickets/${ticketId}/reply`, { content });
+  async replyToTicket(
+    ticketId: string,
+    content: string,
+    idempotencyKey = crypto.randomUUID(),
+  ): Promise<void> {
+    return apiClient.post(`/tickets/${ticketId}/reply`, { content, idempotencyKey });
   }
 }
 

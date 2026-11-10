@@ -72,5 +72,6 @@ export const ticketsSchema = {
   // ── Agent UI: reply to customer via email ─────────────────────────────────
   replyToTicket: Joi.object({
     content: Joi.string().trim().min(1).max(10000).required(),
+    idempotencyKey: Joi.string().trim().max(200).optional(),
   }),
 };
