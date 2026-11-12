@@ -23,6 +23,7 @@ import {
   cleanFinalResponse,
   TOOL_LIMIT_FINAL_RESPONSE_INSTRUCTION,
 } from "../utils/tool-limit";
+import { buildToolInputSchema } from "../utils/tool-schema";
 
 export class BedrockLLMProvider implements LLMProvider {
   readonly name = "bedrock";
@@ -203,27 +204,12 @@ export class BedrockLLMProvider implements LLMProvider {
       tools.length > 0
         ? {
             tools: tools.map((t) => {
-              const properties: Record<string, unknown> = {};
-              const required: string[] = [];
-
-              for (const [k, v] of Object.entries(t.parameters)) {
-                if (k === "organizationId" || k === "conversationId") continue;
-                const paramDef = v as unknown as Record<string, unknown>;
-                const { required: req, ...rest } = paramDef;
-                properties[k] = rest;
-                if (req) required.push(k);
-              }
-
               return {
                 toolSpec: {
                   name: t.name,
                   description: t.description,
                   inputSchema: {
-                    json: {
-                      type: "object",
-                      properties,
-                      ...(required.length > 0 ? { required } : {}),
-                    },
+                    json: buildToolInputSchema(t),
                   },
                 },
               };

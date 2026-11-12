@@ -5,6 +5,10 @@ const slug = Joi.string().trim().min(1).max(160);
 export const integrationsSchema = {
   agentDiscoveryQuery: Joi.object({
     organizationId: Joi.string().hex().length(24).required(),
+    query: Joi.string().trim().min(1).max(2000).required(),
+    channel: Joi.string()
+      .valid("widget", "email", "whatsapp", "telegram")
+      .default("widget"),
   }),
   agentExecute: Joi.object({
     organizationId: Joi.string().hex().length(24).required(),
@@ -23,7 +27,6 @@ export const integrationsSchema = {
   connectionParams: Joi.object({
     connectionId: Joi.string().hex().length(24).required(),
   }),
-  approvalParams: Joi.object({ id: Joi.string().hex().length(24).required() }),
   execute: Joi.object({
     connectionId: Joi.string().hex().length(24).required(),
     toolSlug: slug.required(),

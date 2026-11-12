@@ -23,11 +23,15 @@ export interface IngestionStatusUpdate {
 }
 
 export const InternalApiService = {
-  async getComposioTools(organizationId: string): Promise<any[]> {
+  async getComposioTools(
+    organizationId: string,
+    query: string,
+    channel: "widget" | "email" | "whatsapp" | "telegram" = "widget",
+  ): Promise<any> {
     const { data } = await internalApi.get("/integrations/ai/tools", {
-      params: { organizationId },
+      params: { organizationId, query, channel },
     });
-    return data?.data ?? [];
+    return data?.data;
   },
 
   async executeComposioTool(payload: {

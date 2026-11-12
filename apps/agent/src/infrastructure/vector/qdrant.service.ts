@@ -21,7 +21,9 @@ class QdrantVectorStore implements VectorStore {
 
     if (existing.exists) {
       const info = await this.client.getCollection(COLLECTION);
-      const existingSize = (info.config?.params?.vectors as any)?.size as number | undefined;
+      const existingSize = (info.config?.params?.vectors as any)?.size as
+        | number
+        | undefined;
       if (existingSize === targetDimensions) return;
 
       console.warn(
@@ -82,7 +84,8 @@ class QdrantVectorStore implements VectorStore {
     if (this.verifiedDimensions !== targetDimensions) {
       try {
         const collectionInfo = await this.client.getCollection(COLLECTION);
-        const existingSize = (collectionInfo.config?.params?.vectors as any)?.size as number | undefined;
+        const existingSize = (collectionInfo.config?.params?.vectors as any)
+          ?.size as number | undefined;
 
         if (existingSize && existingSize !== targetDimensions) {
           console.warn(
@@ -95,14 +98,22 @@ class QdrantVectorStore implements VectorStore {
           console.log(`[Qdrant]   Collection exists: YES`);
           console.log(`[Qdrant]   Total points: ${pointsCount}`);
           if (pointsCount === 0) {
-            console.log(`[Qdrant]   ⚠️  Collection is EMPTY - no documents ingested yet`);
+            console.log(
+              `[Qdrant]   ⚠️  Collection is EMPTY - no documents ingested yet`,
+            );
           }
         }
         this.verifiedDimensions = targetDimensions;
       } catch (err: any) {
-        const isNotFound = err?.status === 404 || String(err?.message || "").toLowerCase().includes("not found");
+        const isNotFound =
+          err?.status === 404 ||
+          String(err?.message || "")
+            .toLowerCase()
+            .includes("not found");
         if (isNotFound) {
-          console.log(`[Qdrant]   Collection exists: NO — creating with ${targetDimensions}d`);
+          console.log(
+            `[Qdrant]   Collection exists: NO — creating with ${targetDimensions}d`,
+          );
           await this.ensureCollection(targetDimensions);
         } else {
           console.error(`[Qdrant]   Failed to verify collection`, err);
@@ -110,18 +121,24 @@ class QdrantVectorStore implements VectorStore {
         }
       }
     } else {
-      console.log(`[Qdrant]   Collection dimensions verified in-memory (${targetDimensions}d)`);
+      console.log(
+        `[Qdrant]   Collection dimensions verified in-memory (${targetDimensions}d)`,
+      );
     }
 
     const mustConditions: any[] = [
-      { key: "organizationId", match: { value: options.organizationId } }
+      { key: "organizationId", match: { value: options.organizationId } },
     ];
 
     if (options.type) {
       mustConditions.push({ key: "type", match: { value: options.type } });
-      console.log(`[Qdrant]   Filter: organizationId == "${options.organizationId}" AND type == "${options.type}"`);
+      console.log(
+        `[Qdrant]   Filter: organizationId == "${options.organizationId}" AND type == "${options.type}"`,
+      );
     } else {
-      console.log(`[Qdrant]   Filter: organizationId == "${options.organizationId}"`);
+      console.log(
+        `[Qdrant]   Filter: organizationId == "${options.organizationId}"`,
+      );
     }
 
     const searchParams = {
@@ -132,7 +149,10 @@ class QdrantVectorStore implements VectorStore {
     };
 
     console.log(`[Qdrant]   Executing search...`);
-    const { points: results } = await this.client.query(COLLECTION, searchParams);
+    const { points: results } = await this.client.query(
+      COLLECTION,
+      searchParams,
+    );
 
     console.log(`[Qdrant]   ✓ Search completed`);
     console.log(`[Qdrant]   Results found: ${results.length}`);
@@ -141,11 +161,17 @@ class QdrantVectorStore implements VectorStore {
       console.log(`[Qdrant]   Top matches:`);
       results.slice(0, 3).forEach((r, i) => {
         const payload = r.payload as any;
-        console.log(`[Qdrant]     ${i + 1}. score=${r.score.toFixed(4)} id=${r.id} orgId=${payload?.organizationId}`);
+        console.log(
+          `[Qdrant]     ${i + 1}. score=${r.score.toFixed(4)} id=${r.id} orgId=${payload?.organizationId}`,
+        );
       });
     } else {
-      console.log(`[Qdrant]   ⚠️  No results matched for organizationId: ${options.organizationId}`);
-      console.log(`[Qdrant]   Debug: Check if documents have been ingested for this organization`);
+      console.log(
+        `[Qdrant]   ⚠️  No results matched for organizationId: ${options.organizationId}`,
+      );
+      console.log(
+        `[Qdrant]   Debug: Check if documents have been ingested for this organization`,
+      );
     }
     console.log(`[Qdrant] ════════════════════════════════════════════════`);
 
@@ -156,12 +182,16 @@ class QdrantVectorStore implements VectorStore {
     }));
   }
 
-  async deleteByDocumentId(documentId: string, organizationId: string): Promise<void> {
+  async deleteByDocumentId(
+    documentId: string,
+    organizationId: string,
+  ): Promise<void> {
     await this.client.delete(COLLECTION, {
+      wait: true,
       filter: {
         must: [
           { key: "organizationId", match: { value: organizationId } },
-          { key: "documentId", match: { value: documentId } }
+          { key: "documentId", match: { value: documentId } },
         ],
       },
     });

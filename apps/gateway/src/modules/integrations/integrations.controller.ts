@@ -14,7 +14,11 @@ export const IntegrationsController = {
       200,
       true,
       "Agent integration tools discovered",
-      await service.discoverAgentTools(String(req.query.organizationId)),
+      await service.discoverAgentTools(
+        String(req.query.organizationId),
+        String(req.query.query),
+        String(req.query.channel || "widget"),
+      ),
     ),
   ),
   agentExecute: asyncHandler(async (req: Request, res: Response) =>
@@ -136,41 +140,6 @@ export const IntegrationsController = {
         req.user.activeOrganizationId,
         req.user.userId,
         req.body,
-      ),
-    ),
-  ),
-  approvals: asyncHandler(async (req: AuthenticatedRequest, res: Response) =>
-    sendResponse(
-      res,
-      200,
-      true,
-      "Integration approvals retrieved",
-      await service.listApprovals(req.user.activeOrganizationId),
-    ),
-  ),
-  approve: asyncHandler(async (req: AuthenticatedRequest, res: Response) =>
-    sendResponse(
-      res,
-      200,
-      true,
-      "Integration action approved and executed",
-      await service.approveAndExecute(
-        req.user.activeOrganizationId,
-        req.user.userId,
-        param(req.params.id),
-      ),
-    ),
-  ),
-  reject: asyncHandler(async (req: AuthenticatedRequest, res: Response) =>
-    sendResponse(
-      res,
-      200,
-      true,
-      "Integration action rejected",
-      await service.rejectApproval(
-        req.user.activeOrganizationId,
-        req.user.userId,
-        param(req.params.id),
       ),
     ),
   ),

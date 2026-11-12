@@ -1,5 +1,14 @@
 import { Tool, ToolFilterOptions } from "../agent.types";
 import { getComposioTools } from "./composio.tools";
+import { isDirectToolExecutionRequest } from "./connected-tool-routing";
+
+export interface ToolResolution {
+  tools: Tool[];
+  connectedIntent: boolean;
+  connectedStatus: string;
+  connectedMessage: string;
+  relevantToolkits: string[];
+}
 
 const registry = new Map<string, Tool>();
 
@@ -20,7 +29,7 @@ export function getAllTools(): Tool[] {
 /** Returns dynamically filtered tools based on conversation context/configuration */
 export async function getToolsForContext(
   options: ToolFilterOptions,
-): Promise<Tool[]> {
+): Promise<ToolResolution> {
   let tools = [...registry.values()];
 
   // If escalation is disabled, exclude escalate_to_human tool completely
@@ -35,16 +44,58 @@ export async function getToolsForContext(
     );
   }
 
-  const composioTools = await getComposioTools(options.organizationId);
+  const directExecution = isDirectToolExecutionRequest(
+    options.request || options.query || "",
+  );
+  // JIT discovery is for external execution intents, not greetings or ordinary
+  // support questions. Keeping this boundary avoids adding Composio network
+  // latency/failure modes to every chat turn.
+  if (!directExecution) {
+    return {
+      tools,
+      connectedIntent: false,
+      connectedStatus: "not_requested",
+      connectedMessage: "Connected-tool discovery was not required",
+      relevantToolkits: [],
+    };
+  }
+
+  const composioTools = await getComposioTools(
+    options.organizationId,
+    options.query,
+    options.channel,
+  );
+  const connectedIntent =
+    directExecution &&
+    (composioTools.tools.length > 0 ||
+      composioTools.relevantToolkits.length > 0);
+
+  // Once a direct connected-app intent is resolved, irrelevant support tools
+  // must not compete with it (web/FAQ/tickets/OTP were the observed failures).
+  if (connectedIntent && composioTools.tools.length > 0) {
+    return {
+      tools: composioTools.tools,
+      connectedIntent,
+      connectedStatus: composioTools.status,
+      connectedMessage: composioTools.message,
+      relevantToolkits: composioTools.relevantToolkits,
+    };
+  }
   const names = new Set(tools.map((tool) => tool.name));
-  for (const tool of composioTools) {
+  for (const tool of composioTools.tools) {
     if (!names.has(tool.name)) {
       tools.push(tool);
       names.add(tool.name);
     }
   }
 
-  return tools;
+  return {
+    tools,
+    connectedIntent,
+    connectedStatus: composioTools.status,
+    connectedMessage: composioTools.message,
+    relevantToolkits: composioTools.relevantToolkits,
+  };
 }
 
 // ─── Register built-in tools ─────────────────────────────────────────────────

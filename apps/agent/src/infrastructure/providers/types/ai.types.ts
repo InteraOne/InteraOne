@@ -1,4 +1,7 @@
-import { Tool, ToolExecutionContext } from "../../../modules/agents/agent.types";
+import {
+  Tool,
+  ToolExecutionContext,
+} from "../../../modules/agents/agent.types";
 
 // ── Provider Identity ─────────────────────────────────────────────────────────
 export type ProviderType = "bedrock" | "ollama" | "huggingface" | "openai";
@@ -35,6 +38,8 @@ export interface LLMOptions {
   temperature?: number;
   maxTokens?: number;
   tools?: Tool[];
+  /** Require at least one tool call on the first model turn. */
+  requireToolCall?: boolean;
   toolContext?: ToolExecutionContext;
   onStream?: (chunk: string, isThought?: boolean) => void;
   onToolEvent?: (event: ToolEventData) => void;

@@ -394,7 +394,9 @@ export function ComposioToolkitPage() {
                     ) : (
                       <CircleAlert className="h-3 w-3" />
                     )}
-                    {tool.risk === "read" ? "Read only" : "Approval required"}
+                    {tool.risk === "read"
+                      ? "Read only"
+                      : "Executes immediately"}
                   </span>
                 </span>
                 <span className="mt-2 block max-h-[3.75rem] overflow-hidden text-xs leading-5 text-muted-foreground [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:3]">

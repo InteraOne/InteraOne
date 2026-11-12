@@ -29,6 +29,7 @@
     "@aws-sdk/client-sesv2": "^3.1064.0",
     "@composio/core": "0.14.1",
     "@socket.io/redis-adapter": "^8.2.1",
+    "ajv": "^8.18.0",
     "bcryptjs": "^2.4.3",
     "bullmq": "^5.0.0",
     "cors": "^2.8.5",

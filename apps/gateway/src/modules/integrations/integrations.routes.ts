@@ -63,14 +63,3 @@ integrationsRouter.post(
   validateRequest(integrationsSchema.execute),
   IntegrationsController.execute,
 );
-integrationsRouter.get("/approvals", IntegrationsController.approvals);
-integrationsRouter.post(
-  "/approvals/:id/approve",
-  validateRequest(integrationsSchema.approvalParams, "params"),
-  IntegrationsController.approve,
-);
-integrationsRouter.post(
-  "/approvals/:id/reject",
-  validateRequest(integrationsSchema.approvalParams, "params"),
-  IntegrationsController.reject,
-);

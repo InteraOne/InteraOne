@@ -7,7 +7,9 @@ import axios from "axios";
  */
 export const internalApi = axios.create({
   baseURL: (process.env.API_URL || "http://localhost:3002/api/v1").replace(/\/$/, ""),
-  timeout: 10_000,
+  // Must exceed the gateway's default 15s Composio operation budget plus
+  // database and HTTP overhead. Individual provider calls remain cancellable.
+  timeout: parseInt(process.env.INTERNAL_API_TIMEOUT_MS || "20000", 10),
   headers: {
     "Content-Type": "application/json",
     ...(process.env.AI_TOOL_SECRET

@@ -4,7 +4,6 @@ export interface IIntegrationAuditEvent extends Document {
   organizationId: Types.ObjectId;
   actorUserId?: Types.ObjectId | null;
   connectionId?: Types.ObjectId | null;
-  approvalId?: Types.ObjectId | null;
   eventType: string;
   toolkitSlug?: string;
   toolSlug?: string;
@@ -15,10 +14,18 @@ export interface IIntegrationAuditEvent extends Document {
 
 const integrationAuditEventSchema = new Schema<IIntegrationAuditEvent>(
   {
-    organizationId: { type: Schema.Types.ObjectId, ref: "Organization", required: true, index: true },
+    organizationId: {
+      type: Schema.Types.ObjectId,
+      ref: "Organization",
+      required: true,
+      index: true,
+    },
     actorUserId: { type: Schema.Types.ObjectId, ref: "User", default: null },
-    connectionId: { type: Schema.Types.ObjectId, ref: "IntegrationConnection", default: null },
-    approvalId: { type: Schema.Types.ObjectId, ref: "IntegrationToolApproval", default: null },
+    connectionId: {
+      type: Schema.Types.ObjectId,
+      ref: "IntegrationConnection",
+      default: null,
+    },
     eventType: { type: String, required: true, maxlength: 80, index: true },
     toolkitSlug: { type: String, maxlength: 80 },
     toolSlug: { type: String, maxlength: 160 },

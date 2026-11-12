@@ -8,6 +8,7 @@ import {
 } from "./knowledge.types";
 import { ingestionQueue } from "@shared/infra/queue";
 import logger from "@shared/core/logger";
+import { normalizeKnowledgeUrl } from "./knowledge-url";
 
 class KnowledgeService {
   /**
@@ -20,7 +21,12 @@ class KnowledgeService {
     organizationId: string,
   ) {
     const { uploadUrl: presignedUrl, fileKey } =
-      await StorageService.generatePresignedUploadUrl(meta.fileName, meta.mimeType, organizationId, 600);
+      await StorageService.generatePresignedUploadUrl(
+        meta.fileName,
+        meta.mimeType,
+        organizationId,
+        600,
+      );
 
     const doc = await Knowledge.create({
       organizationId,
@@ -70,8 +76,11 @@ class KnowledgeService {
       catalog: doc.catalog,
     });
 
-    logger.info("✅ Knowledge document confirmed & queued", { documentId, organizationId });
-    
+    logger.info("✅ Knowledge document confirmed & queued", {
+      documentId,
+      organizationId,
+    });
+
     await NotificationService.create({
       organizationId,
       type: "ai_sync",
@@ -89,6 +98,36 @@ class KnowledgeService {
     createdBy: string,
     organizationId: string,
   ) {
+    const normalizedUrl =
+      data.source === "url" && data.url
+        ? normalizeKnowledgeUrl(data.url)
+        : undefined;
+
+    if (normalizedUrl) {
+      const candidates = await Knowledge.find({
+        organizationId,
+        source: "url",
+      })
+        .select("sourceUrl sourceUrlNormalized")
+        .lean();
+      const existing = candidates.find((candidate) => {
+        if (candidate.sourceUrlNormalized === normalizedUrl) return true;
+        if (!candidate.sourceUrl) return false;
+        try {
+          return normalizeKnowledgeUrl(candidate.sourceUrl) === normalizedUrl;
+        } catch {
+          return false;
+        }
+      });
+      if (existing) {
+        return Knowledge.findByIdAndUpdate(
+          existing._id,
+          { $set: { sourceUrlNormalized: normalizedUrl } },
+          { returnDocument: "after" },
+        );
+      }
+    }
+
     const doc = await Knowledge.create({
       organizationId,
       title: data.title,
@@ -98,6 +137,7 @@ class KnowledgeService {
       status: "queued",
       content: data.content,
       sourceUrl: data.url,
+      sourceUrlNormalized: normalizedUrl,
       fetchMode: data.fetchMode,
       crawlDepth: data.crawlDepth,
       syncFrequency: data.syncFrequency,
@@ -120,8 +160,12 @@ class KnowledgeService {
       syncFrequency: data.syncFrequency,
     });
 
-    logger.info("📝 Knowledge text/URL entry created & queued", { documentId: String(doc._id), organizationId, title: doc.title });
-    
+    logger.info("📝 Knowledge text/URL entry created & queued", {
+      documentId: String(doc._id),
+      organizationId,
+      title: doc.title,
+    });
+
     await NotificationService.create({
       organizationId,
       type: "ai_sync",
@@ -138,9 +182,15 @@ class KnowledgeService {
   }
 
   async getViewUrl(documentId: string, organizationId: string) {
-    const doc = await Knowledge.findOne({ _id: documentId, organizationId }).lean();
+    const doc = await Knowledge.findOne({
+      _id: documentId,
+      organizationId,
+    }).lean();
     if (!doc || !doc.fileKey) return null;
-    const url = await StorageService.generatePresignedDownloadUrl(doc.fileKey, 300);
+    const url = await StorageService.generatePresignedDownloadUrl(
+      doc.fileKey,
+      300,
+    );
     return { url, fileName: doc.fileName, mimeType: doc.mimeType };
   }
 
@@ -168,8 +218,11 @@ class KnowledgeService {
       syncFrequency: doc.syncFrequency,
     });
 
-    logger.info("🔄 Knowledge item re-queued for reindex", { documentId, organizationId });
-    
+    logger.info("🔄 Knowledge item re-queued for reindex", {
+      documentId,
+      organizationId,
+    });
+
     await NotificationService.create({
       organizationId,
       type: "ai_sync",
@@ -193,20 +246,35 @@ class KnowledgeService {
 
     if (patch.isPaused === true) {
       try {
-        const [waiting, delayed] = await Promise.all([ingestionQueue.getWaiting(), ingestionQueue.getDelayed()]);
-        const toCancel = [...waiting, ...delayed].filter((j) => j.data.documentId === documentId);
+        const [waiting, delayed] = await Promise.all([
+          ingestionQueue.getWaiting(),
+          ingestionQueue.getDelayed(),
+        ]);
+        const toCancel = [...waiting, ...delayed].filter(
+          (j) => j.data.documentId === documentId,
+        );
         await Promise.all(toCancel.map((j) => j.remove()));
       } catch (err) {
-        logger.warn("Could not cancel queued ingestion jobs on pause", { documentId, err });
+        logger.warn("Could not cancel queued ingestion jobs on pause", {
+          documentId,
+          err,
+        });
       }
     }
 
-    logger.info("✏️  Knowledge item updated", { documentId, organizationId, patch });
+    logger.info("✏️  Knowledge item updated", {
+      documentId,
+      organizationId,
+      patch,
+    });
     return doc;
   }
 
   async deleteItem(documentId: string, organizationId: string) {
-    const doc = await Knowledge.findOneAndDelete({ _id: documentId, organizationId });
+    const doc = await Knowledge.findOneAndDelete({
+      _id: documentId,
+      organizationId,
+    });
     if (!doc) return null;
 
     if (doc.fileKey) {
@@ -218,11 +286,19 @@ class KnowledgeService {
     }
 
     try {
-      const [waiting, delayed] = await Promise.all([ingestionQueue.getWaiting(), ingestionQueue.getDelayed()]);
-      const toCancel = [...waiting, ...delayed].filter((j) => j.data.documentId === documentId);
+      const [waiting, delayed] = await Promise.all([
+        ingestionQueue.getWaiting(),
+        ingestionQueue.getDelayed(),
+      ]);
+      const toCancel = [...waiting, ...delayed].filter(
+        (j) => j.data.documentId === documentId,
+      );
       await Promise.all(toCancel.map((j) => j.remove()));
     } catch (err) {
-      logger.warn("Could not cancel queued ingestion jobs", { documentId, err });
+      logger.warn("Could not cancel queued ingestion jobs", {
+        documentId,
+        err,
+      });
     }
 
     await ingestionQueue.add("delete-vectors", {
@@ -244,12 +320,22 @@ class KnowledgeService {
         { organizationId },
         { $pull: { suggestions: { faqId: documentId } } },
       );
-      logger.info("🔗  Removed deleted FAQ from widget suggestions", { documentId, organizationId });
+      logger.info("🔗  Removed deleted FAQ from widget suggestions", {
+        documentId,
+        organizationId,
+      });
     } catch (widgetErr) {
-      logger.warn("Could not remove FAQ from widget suggestions", { documentId, widgetErr });
+      logger.warn("Could not remove FAQ from widget suggestions", {
+        documentId,
+        widgetErr,
+      });
     }
 
-    logger.info("🗑️  Knowledge item deleted", { documentId, organizationId, title: doc.title });
+    logger.info("🗑️  Knowledge item deleted", {
+      documentId,
+      organizationId,
+      title: doc.title,
+    });
     return doc;
   }
 }

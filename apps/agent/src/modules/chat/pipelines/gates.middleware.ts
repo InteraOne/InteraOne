@@ -11,6 +11,8 @@ import {
 } from "../utils/chat.utils";
 import { makeTimer } from "../../../shared/timing";
 import { Channel, MiddlewareContext, MiddlewareResult } from "../chat.types";
+import { isDirectToolExecutionRequest } from "../../agents/tools/connected-tool-routing";
+import { shouldGroundKnowledgeRequest } from "./knowledge-grounding";
 
 // Re-export makeTimer so callers can construct a MiddlewareContext conveniently
 export { makeTimer };
@@ -38,15 +40,21 @@ async function checkConversationGate(
     return { shouldReturn: true, channel: "widget" };
   }
 
-  const channel = (gate?.interactionSource || job.channel || "widget") as Channel;
+  const channel = (gate?.interactionSource ||
+    job.channel ||
+    "widget") as Channel;
 
-  console.log(`\n[Pipeline] --- NEW JOB ----------------------------------------`);
+  console.log(
+    `\n[Pipeline] --- NEW JOB ----------------------------------------`,
+  );
   console.log(`[Pipeline] conversationId : ${conversationId}`);
   console.log(`[Pipeline] messageId      : ${job.messageId}`);
   console.log(`[Pipeline] organizationId : ${job.organizationId}`);
   console.log(`[Pipeline] channel        : ${channel}`);
   console.log(`[Pipeline] fallbackToAgent: ${job.fallbackToAgent ?? true}`);
-  console.log(`[Pipeline] collectUserInfo: ${JSON.stringify(job.collectUserInfo ?? {})}`);
+  console.log(
+    `[Pipeline] collectUserInfo: ${JSON.stringify(job.collectUserInfo ?? {})}`,
+  );
 
   return { shouldReturn: false, channel };
 }
@@ -124,19 +132,23 @@ async function checkOtpVerification(ctx: MiddlewareContext): Promise<{
   const stepTimestamp = new Date();
   const verification = verifyTool
     ? ((await verifyTool.execute(
-      { code: otpCode },
-      {
-        organizationId: job.organizationId,
-        conversationId: job.conversationId,
-        messageId: job.messageId,
-      },
-    )) as {
-      status?: string;
-      verified?: boolean;
-      email?: string | null;
-      message?: string;
-    })
-    : { status: "error", verified: false, message: "OTP verifier is unavailable" };
+        { code: otpCode },
+        {
+          organizationId: job.organizationId,
+          conversationId: job.conversationId,
+          messageId: job.messageId,
+        },
+      )) as {
+        status?: string;
+        verified?: boolean;
+        email?: string | null;
+        message?: string;
+      })
+    : {
+        status: "error",
+        verified: false,
+        message: "OTP verifier is unavailable",
+      };
   console.timeEnd(t("otp:verify"));
 
   steps.push({
@@ -163,14 +175,21 @@ async function checkOtpVerification(ctx: MiddlewareContext): Promise<{
   let reply =
     "That verification code did not match. Please check the latest code in your email and try again.";
   if (verification.message?.includes("expired")) {
-    reply = "That verification code has expired. Please request a new code and try again.";
+    reply =
+      "That verification code has expired. Please request a new code and try again.";
   } else if (verification.message?.includes("Too many attempts")) {
-    reply = "Too many verification attempts were made. Please request a new code and try again.";
+    reply =
+      "Too many verification attempts were made. Please request a new code and try again.";
   } else if (verification.message && verification.message !== "Invalid OTP") {
-    reply = "I could not verify that code right now. Please try again in a moment.";
+    reply =
+      "I could not verify that code right now. Please try again in a moment.";
   }
 
-  await publishResponse({ conversationId, messageId: job.messageId, content: reply });
+  await publishResponse({
+    conversationId,
+    messageId: job.messageId,
+    content: reply,
+  });
 
   try {
     await InternalApiService.saveAgentRunLogs(conversationId, {
@@ -202,6 +221,22 @@ async function checkFaqFastPath(
   const { job, conversationId, content, startTime, steps, t } = ctx;
 
   if (otpCode) {
+    return { shouldReturn: false };
+  }
+
+  // Execution commands must reach dynamic connected-tool discovery. A semantic
+  // FAQ hit is documentation, not evidence that an external action ran.
+  if (isDirectToolExecutionRequest(content)) {
+    console.log(
+      "[Pipeline] Skipping FAQ check for direct tool execution intent",
+    );
+    return { shouldReturn: false };
+  }
+
+  // Grounded factual requests are searched once in the main pipeline. Running
+  // the FAQ search here would repeat the same remote embedding call.
+  if (shouldGroundKnowledgeRequest(content)) {
+    console.log("[Pipeline] Skipping FAQ check for grounded factual request");
     return { shouldReturn: false };
   }
 
@@ -244,7 +279,11 @@ async function checkFaqFastPath(
       `[Pipeline] FAQ match (score: ${match.score.toFixed(4)}) - returning directly, no LLM`,
     );
 
-    await publishResponse({ conversationId, messageId: job.messageId, content: faqAnswer });
+    await publishResponse({
+      conversationId,
+      messageId: job.messageId,
+      content: faqAnswer,
+    });
 
     steps.push({
       toolName: "faq_fast_path",
@@ -267,7 +306,10 @@ async function checkFaqFastPath(
         usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
       });
     } catch (apiErr: any) {
-      console.error("[Pipeline] Failed to save agent run logs:", apiErr.message);
+      console.error(
+        "[Pipeline] Failed to save agent run logs:",
+        apiErr.message,
+      );
     }
 
     console.timeEnd(t("total"));

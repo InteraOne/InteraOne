@@ -59,27 +59,6 @@ export interface IntegrationConnection {
   createdAt: string;
 }
 
-export interface IntegrationApproval {
-  _id: string;
-  toolkitSlug: string;
-  toolSlug: string;
-  risk: "write" | "sensitive";
-  arguments: Record<string, unknown>;
-  argumentHash: string;
-  status:
-    | "pending"
-    | "approved"
-    | "rejected"
-    | "expired"
-    | "executing"
-    | "executed"
-    | "failed";
-  expiresAt: string;
-  requestedBy: { name?: string; email?: string } | string;
-  error?: string | null;
-  createdAt: string;
-}
-
 export const composioApi = {
   catalog: (input: { page: number; limit: number; search?: string }) => {
     const query = new URLSearchParams({
@@ -117,12 +96,4 @@ export const composioApi = {
       allowedTools: Array<{ slug: string; risk: ToolRisk }>;
     },
   ) => apiClient.put(`/integrations/${toolkit}/policy`, input),
-  approvals: () =>
-    apiClient.get<{ success: boolean; data: IntegrationApproval[] }>(
-      "/integrations/approvals",
-    ),
-  approve: (id: string) =>
-    apiClient.post(`/integrations/approvals/${id}/approve`),
-  reject: (id: string) =>
-    apiClient.post(`/integrations/approvals/${id}/reject`),
 };

@@ -92,7 +92,17 @@ export {
   LeadSubmissionStatus,
 } from "./LeadSubmission";
 export { FacebookOAuthState, IFacebookOAuthState } from "./FacebookOAuthState";
-export { IntegrationConnection, IIntegrationConnection, IntegrationConnectionStatus } from "./IntegrationConnection";
-export { IntegrationPolicy, IIntegrationPolicy, IntegrationToolRisk } from "./IntegrationPolicy";
-export { IntegrationToolApproval, IIntegrationToolApproval, IntegrationApprovalStatus } from "./IntegrationToolApproval";
-export { IntegrationAuditEvent, IIntegrationAuditEvent } from "./IntegrationAuditEvent";
+export {
+  IntegrationConnection,
+  IIntegrationConnection,
+  IntegrationConnectionStatus,
+} from "./IntegrationConnection";
+export {
+  IntegrationPolicy,
+  IIntegrationPolicy,
+  IntegrationToolRisk,
+} from "./IntegrationPolicy";
+export {
+  IntegrationAuditEvent,
+  IIntegrationAuditEvent,
+} from "./IntegrationAuditEvent";
