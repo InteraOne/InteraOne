@@ -9,7 +9,6 @@ const keys = {
   toolkit: (slug: string) =>
     ["composio-integrations", "toolkit", slug] as const,
   connections: ["composio-integrations", "connections"] as const,
-  approvals: ["composio-integrations", "approvals"] as const,
 };
 
 export function useComposioCatalog(input: {
@@ -45,15 +44,6 @@ export function useComposioConnections() {
       )
         ? 5000
         : false,
-  });
-}
-
-export function useComposioApprovals() {
-  return useQuery({
-    queryKey: keys.approvals,
-    queryFn: composioApi.approvals,
-    select: (result) => result.data,
-    refetchInterval: 15000,
   });
 }
 
@@ -98,15 +88,5 @@ export function useUpdateComposioPolicy() {
         queryKey: keys.toolkit(variables.toolkit),
       });
     },
-  });
-}
-
-export function useDecideComposioApproval(action: "approve" | "reject") {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (id: string) =>
-      action === "approve" ? composioApi.approve(id) : composioApi.reject(id),
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: keys.approvals }),
   });
 }

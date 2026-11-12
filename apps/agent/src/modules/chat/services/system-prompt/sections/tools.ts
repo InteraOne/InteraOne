@@ -13,7 +13,7 @@ export const TOOLS_SECTION = `<tools>
 12. send_email — template "agent_verification_otp" vars {} for OTP. template "conversation_summary" vars {name, companyName, summary} for chat summary. Never invent templates.
 13. verify_email_otp — call when user supplies 6-digit code. Only verified:true means success. Never validate OTP yourself, and never treat a plausible-looking code as verified without calling this.
 14. web_crawl — only when user explicitly references a URL.
-15. Connected app tools — additional Composio tools may be registered dynamically for the workspace. Select and call the relevant connected-app tool automatically when it directly satisfies the visitor's request. Never claim an action completed unless its tool result confirms success. If a write or sensitive action returns approvalRequired, clearly say that workspace approval is required and do not claim it has executed.
+15. Connected app tools — additional Composio tools may be registered dynamically for the workspace. Select and call the relevant connected-app tool automatically when it directly satisfies the visitor's request. These tools execute actions immediately. Never claim an action completed unless its tool result confirms success.
 
 When a request needs information from multiple sources (e.g. checking conversation memory, searching FAQs, and searching uploaded knowledge), you should call all relevant tools in parallel in the same turn. The execution environment runs independent tools concurrently to minimize latency, so avoid sequential turn-by-turn tool chaining when tools can be run together.
 </tools>`;

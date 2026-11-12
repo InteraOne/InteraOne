@@ -38,18 +38,18 @@
 
 ## Why InteraOne?
 
-| | **InteraOne** | **Intercom (Fin)** | **Zendesk** | **Chatwoot** |
-|---|---|---|---|---|
-| **Base price** | Free & open source | $29–$132/agent/mo | $55–$169/agent/mo | $0–$99/agent/mo |
-| **AI resolution cost** | $0 — unlimited | $0.99 / resolution | $1.50–$2.00 / resolution | AI credits capped, $20/1k overage |
-| **Self-hosted** | ✅ One click | ❌ | ❌ | ✅ (no AI on free tier) |
-| **Single AI Brain** | ✅ | ❌ | ❌ | ❌ |
-| **WhatsApp + Email + Telegram + Widget** | ✅ | Partial | Partial | ✅ |
-| **Agent Latency** | ⚡ ~500ms | Varies | Varies | No native AI on free tier |
-| **Multiple LLM Providers** | ✅ | ❌ | ❌ | ❌ |
-| **RAG Knowledge Base** | ✅ | Limited | Limited | ❌ |
-| **Ticket + Inbox + Contacts AI** | ✅ | Partial | ✅ | ❌ |
-| **QR Code Offline→Online** | ✅ | ❌ | ❌ | ❌ |
+|                                          | **InteraOne**      | **Intercom (Fin)** | **Zendesk**              | **Chatwoot**                      |
+| ---------------------------------------- | ------------------ | ------------------ | ------------------------ | --------------------------------- |
+| **Base price**                           | Free & open source | $29–$132/agent/mo  | $55–$169/agent/mo        | $0–$99/agent/mo                   |
+| **AI resolution cost**                   | $0 — unlimited     | $0.99 / resolution | $1.50–$2.00 / resolution | AI credits capped, $20/1k overage |
+| **Self-hosted**                          | ✅ One click       | ❌                 | ❌                       | ✅ (no AI on free tier)           |
+| **Single AI Brain**                      | ✅                 | ❌                 | ❌                       | ❌                                |
+| **WhatsApp + Email + Telegram + Widget** | ✅                 | Partial            | Partial                  | ✅                                |
+| **Agent Latency**                        | ⚡ ~500ms          | Varies             | Varies                   | No native AI on free tier         |
+| **Multiple LLM Providers**               | ✅                 | ❌                 | ❌                       | ❌                                |
+| **RAG Knowledge Base**                   | ✅                 | Limited            | Limited                  | ❌                                |
+| **Ticket + Inbox + Contacts AI**         | ✅                 | Partial            | ✅                       | ❌                                |
+| **QR Code Offline→Online**               | ✅                 | ❌                 | ❌                       | ❌                                |
 
 <sub>Pricing as of July 2026 — verify current rates before quoting.</sub>
 
@@ -77,20 +77,22 @@ cd InteraOne
 ```bash
 make all
 ```
+
 > Gateway, console, agent, worker, and launcher all spin up together.
->> Update the `.env` files as needed for your local setup.
+>
+> > Update the `.env` files as needed for your local setup.
 
 <hr/>
 
 ## 🧱 Architecture
 
-| App | Role |
-|---|---|
-| `apps/gateway` | API gateway — routes and auth for all channels |
-| `apps/console` | Admin dashboard for inbox, contacts, and settings |
-| `apps/agent` | The AI brain — LLM orchestration across providers |
-| `apps/worker` | Background jobs, queues, async processing |
-| `apps/launcher` | Embeddable widget for websites and products |
+| App             | Role                                              |
+| --------------- | ------------------------------------------------- |
+| `apps/gateway`  | API gateway — routes and auth for all channels    |
+| `apps/console`  | Admin dashboard for inbox, contacts, and settings |
+| `apps/agent`    | The AI brain — LLM orchestration across providers |
+| `apps/worker`   | Background jobs, queues, async processing         |
+| `apps/launcher` | Embeddable widget for websites and products       |
 
 ### Optional Composio integrations
 
@@ -101,7 +103,7 @@ Workspace admins can connect allowlisted third-party tools through Composio. The
 3. Set `COMPOSIO_ENABLED=true`, `COMPOSIO_API_KEY`, and `COMPOSIO_REDIRECT_URL` for the gateway. Set `COMPOSIO_ENVIRONMENT` to a stable deployment name so scoped user identities remain stable.
 4. Restart the gateway, open **Integrations → AI tool connections**, and connect GitHub.
 
-The initial policy enables only `GITHUB_SEARCH_REPOSITORIES`. An admin may opt into `GITHUB_CREATE_AN_ISSUE`; every use of that write action creates a short-lived, one-time approval. Public widget conversations do not receive Composio tools.
+The initial policy enables only `GITHUB_SEARCH_REPOSITORIES`. An admin may opt into additional actions such as `GITHUB_CREATE_AN_ISSUE`. Once an action is enabled in the workspace policy, the agent executes it immediately through the connected Composio account and reports success only from the provider result.
 
 <hr/>
 

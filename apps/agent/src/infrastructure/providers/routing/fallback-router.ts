@@ -117,6 +117,25 @@ export class FallbackRouter {
 
         const result = await provider.generate(messages, opts);
 
+        // Some providers do not support a native "required" tool choice. Enforce
+        // the contract after generation so they cannot silently answer with a
+        // guide or fabricated success instead of executing the connected tool.
+        if (options.requireToolCall) {
+          const connectedToolNames = new Set(
+            (options.tools || [])
+              .filter((tool) => tool.description.startsWith("[Connected "))
+              .map((tool) => tool.name),
+          );
+          const executedConnectedTool = (result.steps || []).some((step) =>
+            connectedToolNames.has(step.toolName),
+          );
+          if (!executedConnectedTool) {
+            throw new Error(
+              "Required connected tool was not executed by the language model",
+            );
+          }
+        }
+
         // ── Success — clear any prior failure record ────────────────────────
         modelHealth.markHealthy(modelId);
 

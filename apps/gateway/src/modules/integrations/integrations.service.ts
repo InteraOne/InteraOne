@@ -1,4 +1,3 @@
-import { randomUUID } from "crypto";
 import { Types } from "mongoose";
 import config from "@shared/infra/config";
 import { AppError } from "@shared/core/errors";
@@ -6,7 +5,6 @@ import {
   IntegrationAuditEvent,
   IntegrationConnection,
   IntegrationPolicy,
-  IntegrationToolApproval,
 } from "@shared/models";
 import { composioAdapter, buildComposioUserId } from "./composio.adapter";
 import {
@@ -18,9 +16,27 @@ import {
   canonicalizeArguments,
   safeIntegrationError,
 } from "./integrations.utils";
+import { validateToolArguments } from "./integration-schema";
+import {
+  AgentToolDiscoveryResult,
+  candidatesMatchRequestedResources,
+  crossToolkitCapabilitySearchQuery,
+  capabilitySearchQueries,
+  compactConnectedToolQuery,
+  isConnectedToolChannelAllowed,
+  mergeCandidateGroupsRoundRobin,
+  rankAuthorizedToolSlugs,
+  requiredIdentifierQueries,
+  mentionedToolkitSlugs,
+  selectRelevantConnectedTools,
+} from "./integration-discovery";
 
-const APPROVAL_TTL_MS = 15 * 60 * 1000;
 const CATALOG_CACHE_MS = 5 * 60 * 1000;
+const TOOL_SCHEMA_CACHE_MS = 5 * 60 * 1000;
+const AGENT_TOOL_LIMIT = Math.min(
+  30,
+  Math.max(1, parseInt(process.env.COMPOSIO_AGENT_TOOL_LIMIT || "12", 10)),
+);
 
 type ToolkitSummary = Omit<CatalogToolkit, "tools">;
 
@@ -30,6 +46,73 @@ const toolkitCache = new Map<
   string,
   { value: CatalogToolkit; expiresAt: number }
 >();
+const toolSchemaCache = new Map<
+  string,
+  {
+    inputSchema: Record<string, unknown>;
+    outputSchema?: Record<string, unknown>;
+    expiresAt: number;
+  }
+>();
+
+function toolSchemaKey(toolkitSlug: string, toolSlug: string): string {
+  return `${toolkitSlug.toLowerCase()}:${toolSlug}`;
+}
+
+function rememberToolSchema(
+  toolkitSlug: string,
+  toolSlug: string,
+  inputSchema?: Record<string, unknown>,
+  outputSchema?: Record<string, unknown>,
+): void {
+  if (!inputSchema) return;
+  toolSchemaCache.set(toolSchemaKey(toolkitSlug, toolSlug), {
+    inputSchema,
+    outputSchema,
+    expiresAt: Date.now() + TOOL_SCHEMA_CACHE_MS,
+  });
+  if (toolSchemaCache.size > 1000) {
+    const oldestKey = toolSchemaCache.keys().next().value as string | undefined;
+    if (oldestKey) toolSchemaCache.delete(oldestKey);
+  }
+}
+
+async function executionToolSchema(toolkitSlug: string, toolSlug: string) {
+  const key = toolSchemaKey(toolkitSlug, toolSlug);
+  const cached = toolSchemaCache.get(key);
+  if (cached && cached.expiresAt > Date.now()) return cached;
+
+  const tool = await composioAdapter.getCatalogTool(toolSlug);
+  if (
+    !tool ||
+    tool.toolkitSlug !== toolkitSlug.toLowerCase() ||
+    !tool.inputParameters
+  ) {
+    throw new AppError("Integration tool schema is unavailable", 502);
+  }
+  rememberToolSchema(
+    toolkitSlug,
+    toolSlug,
+    tool.inputParameters,
+    tool.outputParameters,
+  );
+  return toolSchemaCache.get(key)!;
+}
+
+async function executeReadTool(
+  input: Parameters<typeof composioAdapter.execute>[0],
+): Promise<unknown> {
+  try {
+    return await composioAdapter.execute(input);
+  } catch (firstError) {
+    // Read actions are side-effect free and safe to retry once on a transient
+    // provider failure. Mutations deliberately never use this helper.
+    if (!(firstError instanceof AppError) || firstError.statusCode !== 502) {
+      throw firstError;
+    }
+    return composioAdapter.execute(input);
+  }
+}
 
 const staticToolkit = (slug: string) =>
   INTEGRATION_CATALOG.find((toolkit) => toolkit.slug === slug.toLowerCase());
@@ -88,7 +171,6 @@ async function audit(input: {
   organizationId: string;
   actorUserId?: string;
   connectionId?: Types.ObjectId;
-  approvalId?: Types.ObjectId;
   eventType: string;
   toolkitSlug?: string;
   toolSlug?: string;
@@ -116,81 +198,277 @@ export class IntegrationsService {
    * Workspace policy and active connected accounts are resolved here so the
    * agent never receives a tool it is not permitted to call.
    */
-  async discoverAgentTools(organizationId: string) {
-    if (!composioAdapter.isAvailable()) return [];
-
+  async discoverAgentTools(
+    organizationId: string,
+    query: string,
+    channel = "widget",
+  ): Promise<AgentToolDiscoveryResult> {
+    if (
+      !isConnectedToolChannelAllowed(
+        channel,
+        process.env.COMPOSIO_AGENT_CHANNELS || "widget,email,whatsapp,telegram",
+      )
+    ) {
+      return {
+        tools: [],
+        status: "channel_restricted",
+        message: `Connected integrations are disabled for the ${channel} channel`,
+        relevantToolkits: [],
+      };
+    }
     const [connections, policies] = await Promise.all([
       IntegrationConnection.find({
         organizationId,
-        status: "active",
       })
         .select("+composioUserId")
         .sort({ updatedAt: -1 }),
       IntegrationPolicy.find({ organizationId, enabled: true }).lean(),
     ]);
 
+    const knownToolkitSlugs = [
+      ...new Set([
+        ...connections.map((connection) => connection.toolkitSlug),
+        ...policies.map((policy) => policy.toolkitSlug),
+      ]),
+    ];
+    const mentionedToolkits = mentionedToolkitSlugs(query, knownToolkitSlugs);
+    if (!config.composio.enabled) {
+      return {
+        tools: [],
+        status: "disabled",
+        message: "Composio integrations are disabled for this deployment",
+        relevantToolkits: mentionedToolkits,
+      };
+    }
+    if (!config.composio.apiKey) {
+      return {
+        tools: [],
+        status: "not_configured",
+        message:
+          "Composio is enabled but its project API key is not configured",
+        relevantToolkits: mentionedToolkits,
+      };
+    }
+    const searchToolkits =
+      mentionedToolkits.length > 0 ? mentionedToolkits : knownToolkitSlugs;
+    const relevantConnections = connections.filter((connection) =>
+      searchToolkits.includes(connection.toolkitSlug),
+    );
+    const activeConnections = relevantConnections.filter(
+      (connection) => connection.status === "active",
+    );
+    if (activeConnections.length === 0) {
+      const observedStatuses = [
+        ...new Set(relevantConnections.map((connection) => connection.status)),
+      ];
+      return {
+        tools: [],
+        status: "no_active_connection",
+        message:
+          observedStatuses.length > 0
+            ? `No active connected account is available (current state: ${observedStatuses.join(", ")})`
+            : "No connected account is available for the requested integration",
+        relevantToolkits: mentionedToolkits,
+      };
+    }
+
     const policyByToolkit = new Map(
       policies.map((policy) => [policy.toolkitSlug, policy]),
     );
-    const selectedToolkits = new Set<string>();
-    const discovered = new Map<string, Record<string, unknown>>();
+    const selectedConnections = new Map<string, (typeof connections)[number]>();
 
-    // A session can bind one account per toolkit. If multiple operators have
-    // connected the same toolkit, use the most recently updated active one.
-    for (const connection of connections) {
-      if (selectedToolkits.has(connection.toolkitSlug)) continue;
-
+    // If multiple operators connected the same toolkit, use the most recently
+    // updated active account. Execution revalidates provider ownership/status.
+    // Keep every authorized active connection eligible for a bounded fallback
+    // search. Some resources live in a companion service (for example Google
+    // Docs files are listed by Drive), even when the user names the editor.
+    for (const connection of connections.filter(
+      (candidate) => candidate.status === "active",
+    )) {
+      if (selectedConnections.has(connection.toolkitSlug)) continue;
       const policy = policyByToolkit.get(connection.toolkitSlug);
       if (!policy || policy.allowedTools.length === 0) continue;
-
-      const toolkit = await resolvedToolkit(connection.toolkitSlug);
-      if (!toolkit) continue;
-
-      const allowedTools = policy.allowedTools.filter((entry) => {
-        const catalogTool = toolkit.tools.find(
-          (tool) => tool.slug === entry.slug,
-        );
-        return catalogTool?.risk === entry.risk;
-      });
-      if (allowedTools.length === 0) continue;
-
-      try {
-        const tools = await composioAdapter.sessionTools({
-          composioUserId: connection.composioUserId,
-          toolkitSlug: connection.toolkitSlug,
-          connectedAccountId: connection.connectedAccountId,
-          allowedToolSlugs: allowedTools.map((tool) => tool.slug),
-        });
-        const riskBySlug = new Map(
-          allowedTools.map((tool) => [tool.slug, tool.risk]),
-        );
-
-        for (const tool of tools) {
-          const risk = riskBySlug.get(tool.slug);
-          if (!risk || discovered.has(tool.slug)) continue;
-          discovered.set(tool.slug, {
-            name: tool.slug,
-            displayName: tool.name || tool.slug,
-            description:
-              tool.description ||
-              `Execute ${tool.name || tool.slug} through the connected ${connection.toolkitSlug} integration.`,
-            parameters: tool.inputParameters || {
-              type: "object",
-              properties: {},
-            },
-            connectionId: connection._id.toString(),
-            toolkitSlug: connection.toolkitSlug,
-            risk,
-          });
-        }
-        selectedToolkits.add(connection.toolkitSlug);
-      } catch {
-        // One stale provider connection must not remove tools from other
-        // healthy integrations or interrupt a customer-facing AI response.
-      }
+      selectedConnections.set(connection.toolkitSlug, connection);
     }
 
-    return [...discovered.values()];
+    const toolkitSlugs = [...selectedConnections.keys()];
+    const primaryToolkitSlugs =
+      mentionedToolkits.length > 0
+        ? toolkitSlugs.filter((slug) => mentionedToolkits.includes(slug))
+        : toolkitSlugs;
+    if (primaryToolkitSlugs.length === 0) {
+      return {
+        tools: [],
+        status: "policy_denied",
+        message:
+          "An account is connected, but workspace policy enables no tools for the requested integration",
+        relevantToolkits: mentionedToolkits,
+      };
+    }
+
+    // One native Composio relevance query replaces loading every schema into
+    // the model. Results retain Composio ordering and complete JSON Schemas.
+    const capabilityQueries = capabilitySearchQueries(query);
+    const candidateGroups = await Promise.all(
+      (capabilityQueries.length > 0 ? capabilityQueries : [query]).map(
+        (capabilityQuery) =>
+          composioAdapter.searchCatalogTools(
+            primaryToolkitSlugs,
+            capabilityQuery,
+            Math.max(AGENT_TOOL_LIMIT * 3, AGENT_TOOL_LIMIT),
+          ),
+      ),
+    );
+    let candidates = mergeCandidateGroupsRoundRobin(candidateGroups);
+    if (
+      mentionedToolkits.length > 0 &&
+      toolkitSlugs.length > primaryToolkitSlugs.length &&
+      !candidatesMatchRequestedResources(query, candidates, mentionedToolkits)
+    ) {
+      const broadCandidates = await composioAdapter.searchCatalogTools(
+        toolkitSlugs,
+        crossToolkitCapabilitySearchQuery(query, mentionedToolkits) || query,
+        Math.max(AGENT_TOOL_LIMIT * 3, AGENT_TOOL_LIMIT),
+      );
+      candidates = [...broadCandidates, ...candidates].filter(
+        (candidate, index, all) =>
+          all.findIndex((other) => other.slug === candidate.slug) === index,
+      );
+    }
+    if (candidates.length === 0) {
+      const compactQuery = compactConnectedToolQuery(query);
+      if (compactQuery && !capabilityQueries.includes(compactQuery)) {
+        candidates = await composioAdapter.searchCatalogTools(
+          toolkitSlugs,
+          compactQuery,
+          Math.max(AGENT_TOOL_LIMIT * 3, AGENT_TOOL_LIMIT),
+        );
+      }
+    }
+    if (candidates.length === 0) {
+      const authorizedSlugs = policies
+        .filter((policy) => toolkitSlugs.includes(policy.toolkitSlug))
+        .flatMap((policy) => policy.allowedTools.map((tool) => tool.slug));
+      const fallbackSlugs = rankAuthorizedToolSlugs(
+        query,
+        authorizedSlugs,
+        Math.max(AGENT_TOOL_LIMIT * 3, AGENT_TOOL_LIMIT),
+      );
+      candidates = await composioAdapter.getCatalogTools(fallbackSlugs);
+    }
+
+    // Mutation schemas commonly require a container/resource ID (tasklist_id,
+    // folder_id, channel_id, etc.). Discover the authorized read tool that can
+    // resolve it so the model never has to copy a documentation example or ask
+    // the user for data available through the connected account.
+    const policyRisk = new Map(
+      policies.flatMap((policy) =>
+        policy.allowedTools.map(
+          (tool) => [`${policy.toolkitSlug}:${tool.slug}`, tool.risk] as const,
+        ),
+      ),
+    );
+    const mutationCandidates = candidates.filter((candidate) => {
+      const risk = policyRisk.get(`${candidate.toolkitSlug}:${candidate.slug}`);
+      return Boolean(risk && risk !== "read");
+    });
+    const resolverQueries = requiredIdentifierQueries(mutationCandidates);
+    if (resolverQueries.length > 0) {
+      const resolverToolkitSlugs = [
+        ...new Set(
+          mutationCandidates.map((candidate) => candidate.toolkitSlug),
+        ),
+      ];
+      const authorizedSlugs = policies
+        .filter((policy) => resolverToolkitSlugs.includes(policy.toolkitSlug))
+        .flatMap((policy) => policy.allowedTools.map((tool) => tool.slug));
+      const resolverGroups = await Promise.all(
+        resolverQueries.map(async (resolverQuery) => {
+          const fallbackSlugs = rankAuthorizedToolSlugs(
+            resolverQuery,
+            authorizedSlugs,
+            3,
+          );
+          return composioAdapter.getCatalogTools(fallbackSlugs);
+        }),
+      );
+      candidates = mergeCandidateGroupsRoundRobin([
+        candidates,
+        mergeCandidateGroupsRoundRobin(resolverGroups),
+      ]);
+    }
+    const discovered = selectRelevantConnectedTools({
+      candidates,
+      connections: [...selectedConnections.values()].map((connection) => ({
+        toolkitSlug: connection.toolkitSlug,
+        connectionId: connection._id.toString(),
+      })),
+      policies: policies.map((policy) => ({
+        toolkitSlug: policy.toolkitSlug,
+        allowedTools: policy.allowedTools.map((tool) => ({
+          slug: tool.slug,
+          risk: tool.risk,
+        })),
+      })),
+      limit: AGENT_TOOL_LIMIT,
+    });
+    if (discovered.length === 0) {
+      return {
+        tools: [],
+        status: candidates.length > 0 ? "policy_denied" : "no_matching_tool",
+        message:
+          candidates.length > 0
+            ? "Composio found relevant capabilities, but workspace policy does not authorize them"
+            : "Composio returned no capability matching this request for the active connected accounts",
+        relevantToolkits: toolkitSlugs,
+      };
+    }
+
+    // Database state can be stale after a provider-side revoke. Validate only
+    // the small set of accounts selected by intent-aware search before exposing
+    // their schemas to the model.
+    const liveConnections = new Set<string>();
+    for (const tool of discovered) {
+      if (liveConnections.has(tool.connectionId)) continue;
+      const connection = selectedConnections.get(tool.toolkitSlug);
+      if (!connection) continue;
+      const owned = await composioAdapter.getOwnedAccount({
+        composioUserId: connection.composioUserId,
+        toolkitSlug: connection.toolkitSlug,
+        connectedAccountId: connection.connectedAccountId,
+      });
+      if (owned?.status === "ACTIVE" && !owned.isDisabled) {
+        liveConnections.add(tool.connectionId);
+      }
+    }
+    const liveTools = discovered.filter((tool) =>
+      liveConnections.has(tool.connectionId),
+    );
+    if (liveTools.length === 0) {
+      return {
+        tools: [],
+        status: "no_active_connection",
+        message:
+          "The stored integration connection is not active at the provider",
+        relevantToolkits: toolkitSlugs,
+      };
+    }
+
+    for (const tool of liveTools) {
+      rememberToolSchema(
+        tool.toolkitSlug,
+        tool.name,
+        tool.parameters,
+        tool.outputSchema,
+      );
+    }
+
+    return {
+      tools: liveTools,
+      status: "ready",
+      message: `Discovered ${liveTools.length} authorized connected tool${liveTools.length === 1 ? "" : "s"}`,
+      relevantToolkits: toolkitSlugs,
+    };
   }
 
   async requestAgentExecution(
@@ -556,6 +834,15 @@ export class IntegrationsService {
       input.toolSlug,
     );
     const canonical = canonicalizeArguments(input.arguments);
+    const schema = await executionToolSchema(
+      connection.toolkitSlug,
+      input.toolSlug,
+    );
+    validateToolArguments(
+      input.toolSlug,
+      schema.inputSchema,
+      canonical.arguments,
+    );
     await audit({
       organizationId,
       actorUserId: userId,
@@ -566,191 +853,41 @@ export class IntegrationsService {
       success: true,
       metadata: { argumentHash: canonical.hash },
     });
-    if (catalogTool.risk === "read") {
-      try {
-        const result = await composioAdapter.execute({
-          composioUserId: connection.composioUserId,
-          toolkitSlug: connection.toolkitSlug,
-          connectedAccountId: connection.connectedAccountId,
-          toolSlug: input.toolSlug,
-          arguments: canonical.arguments,
-        });
-        await audit({
-          organizationId,
-          actorUserId: userId,
-          connectionId: connection._id,
-          eventType: "tool_executed",
-          toolkitSlug: connection.toolkitSlug,
-          toolSlug: input.toolSlug,
-          success: true,
-          metadata: { argumentHash: canonical.hash },
-        });
-        return { approvalRequired: false, result };
-      } catch (error) {
-        await audit({
-          organizationId,
-          actorUserId: userId,
-          connectionId: connection._id,
-          eventType: "tool_failed",
-          toolkitSlug: connection.toolkitSlug,
-          toolSlug: input.toolSlug,
-          success: false,
-          metadata: { argumentHash: canonical.hash },
-        });
-        throw error;
-      }
-    }
-    const approval = await IntegrationToolApproval.create({
-      organizationId,
-      requestedBy: userId,
-      connectionId: connection._id,
-      toolkitSlug: connection.toolkitSlug,
-      toolSlug: input.toolSlug,
-      risk: catalogTool.risk,
-      arguments: canonical.arguments,
-      argumentHash: canonical.hash,
-      expiresAt: new Date(Date.now() + APPROVAL_TTL_MS),
-      idempotencyKey: randomUUID(),
-    });
-    await audit({
-      organizationId,
-      actorUserId: userId,
-      connectionId: connection._id,
-      approvalId: approval._id,
-      eventType: "approval_requested",
-      toolkitSlug: connection.toolkitSlug,
-      toolSlug: input.toolSlug,
-      success: true,
-      metadata: { argumentHash: canonical.hash },
-    });
-    return { approvalRequired: true, approval: approval.toObject() };
-  }
-
-  async listApprovals(organizationId: string) {
-    await IntegrationToolApproval.updateMany(
-      { organizationId, status: "pending", expiresAt: { $lte: new Date() } },
-      { status: "expired" },
-    );
-    return IntegrationToolApproval.find({ organizationId })
-      .populate("requestedBy", "name email")
-      .populate("approvedBy", "name email")
-      .sort({ createdAt: -1 })
-      .limit(100)
-      .lean();
-  }
-
-  async rejectApproval(
-    organizationId: string,
-    approverId: string,
-    approvalId: string,
-  ) {
-    const approval = await IntegrationToolApproval.findOneAndUpdate(
-      {
-        _id: approvalId,
-        organizationId,
-        status: "pending",
-        expiresAt: { $gt: new Date() },
-      },
-      { status: "rejected", approvedBy: approverId, decidedAt: new Date() },
-      { new: true },
-    );
-    if (!approval)
-      throw new AppError(
-        "Approval is expired, already decided, or not found",
-        409,
-      );
-    await audit({
-      organizationId,
-      actorUserId: approverId,
-      connectionId: approval.connectionId,
-      approvalId: approval._id,
-      eventType: "rejected",
-      toolkitSlug: approval.toolkitSlug,
-      toolSlug: approval.toolSlug,
-      success: true,
-    });
-    return approval;
-  }
-
-  async approveAndExecute(
-    organizationId: string,
-    approverId: string,
-    approvalId: string,
-  ) {
-    const approval = await IntegrationToolApproval.findOneAndUpdate(
-      {
-        _id: approvalId,
-        organizationId,
-        status: "pending",
-        expiresAt: { $gt: new Date() },
-      },
-      { status: "executing", approvedBy: approverId, decidedAt: new Date() },
-      { new: true },
-    );
-    if (!approval)
-      throw new AppError(
-        "Approval is expired, already decided, or not found",
-        409,
-      );
-    await audit({
-      organizationId,
-      actorUserId: approverId,
-      connectionId: approval.connectionId,
-      approvalId: approval._id,
-      eventType: "approved",
-      toolkitSlug: approval.toolkitSlug,
-      toolSlug: approval.toolSlug,
-      success: true,
-      metadata: { argumentHash: approval.argumentHash },
-    });
     try {
-      const requestedBy = approval.requestedBy.toString();
-      const { connection } = await this.executionContext(
-        organizationId,
-        requestedBy,
-        approval.connectionId.toString(),
-        approval.toolSlug,
-      );
-      const canonical = canonicalizeArguments(approval.arguments);
-      if (canonical.hash !== approval.argumentHash)
-        throw new AppError("Approval arguments no longer match", 409);
-      const result = await composioAdapter.execute({
+      const executionInput = {
         composioUserId: connection.composioUserId,
-        toolkitSlug: approval.toolkitSlug,
+        toolkitSlug: connection.toolkitSlug,
         connectedAccountId: connection.connectedAccountId,
-        toolSlug: approval.toolSlug,
+        toolSlug: input.toolSlug,
         arguments: canonical.arguments,
-      });
-      approval.status = "executed";
-      approval.executedAt = new Date();
-      approval.resultSummary = { completed: true };
-      await approval.save();
+      };
+      // Reads may be retried once on a transient provider failure. Mutations
+      // execute exactly once to avoid duplicate external side effects.
+      const result =
+        catalogTool.risk === "read"
+          ? await executeReadTool(executionInput)
+          : await composioAdapter.execute(executionInput);
       await audit({
         organizationId,
-        actorUserId: approverId,
-        connectionId: approval.connectionId,
-        approvalId: approval._id,
+        actorUserId: userId,
+        connectionId: connection._id,
         eventType: "tool_executed",
-        toolkitSlug: approval.toolkitSlug,
-        toolSlug: approval.toolSlug,
+        toolkitSlug: connection.toolkitSlug,
+        toolSlug: input.toolSlug,
         success: true,
-        metadata: { argumentHash: approval.argumentHash },
+        metadata: { argumentHash: canonical.hash },
       });
-      return { approval: approval.toObject(), result };
+      return { executed: true, result };
     } catch (error) {
-      approval.status = "failed";
-      approval.error = safeIntegrationError(error);
-      await approval.save();
       await audit({
         organizationId,
-        actorUserId: approverId,
-        connectionId: approval.connectionId,
-        approvalId: approval._id,
+        actorUserId: userId,
+        connectionId: connection._id,
         eventType: "tool_failed",
-        toolkitSlug: approval.toolkitSlug,
-        toolSlug: approval.toolSlug,
+        toolkitSlug: connection.toolkitSlug,
+        toolSlug: input.toolSlug,
         success: false,
-        metadata: { argumentHash: approval.argumentHash },
+        metadata: { argumentHash: canonical.hash },
       });
       throw error;
     }

@@ -117,7 +117,8 @@ export function mergeToolkitTools(
 
 // This reviewed catalog is the offline fallback. When Composio is available,
 // its complete toolkit directory is exposed and every current non-deprecated
-// action is loaded on demand. Reads default on; mutations require approval.
+// action is loaded on demand. Reads default on; mutations require explicit
+// enablement in workspace policy and then execute immediately.
 export const INTEGRATION_CATALOG: CatalogToolkit[] = [
   {
     slug: "gmail",
@@ -932,7 +933,7 @@ export const INTEGRATION_CATALOG: CatalogToolkit[] = [
     slug: "shopify",
     name: "Shopify",
     description:
-      "Inspect store, product, and order data and run approved Shopify updates.",
+      "Inspect store, product, and order data and run enabled Shopify updates.",
     tools: [
       readTool(
         "SHOPIFY_QUERY_SHOP",
@@ -972,7 +973,7 @@ export const INTEGRATION_CATALOG: CatalogToolkit[] = [
       writeTool(
         "SHOPIFY_GRAPH_QL_WRITE_OPERATIONS",
         "Update Shopify data",
-        "Runs an approved Shopify GraphQL write operation.",
+        "Runs an enabled Shopify GraphQL write operation.",
       ),
       writeTool(
         "SHOPIFY_CREATE_CUSTOMER",
@@ -990,7 +991,7 @@ export const INTEGRATION_CATALOG: CatalogToolkit[] = [
     slug: "zoom",
     name: "Zoom",
     description:
-      "Review meetings, participants, and recordings and manage approved Zoom meetings.",
+      "Review meetings, participants, and recordings and manage Zoom meetings.",
     tools: [
       readTool(
         "ZOOM_GET_A_MEETING",
@@ -1030,17 +1031,17 @@ export const INTEGRATION_CATALOG: CatalogToolkit[] = [
       writeTool(
         "ZOOM_CREATE_A_MEETING",
         "Create meeting",
-        "Creates a Zoom meeting after approval.",
+        "Creates a Zoom meeting.",
       ),
       writeTool(
         "ZOOM_UPDATE_A_MEETING",
         "Update meeting",
-        "Updates the schedule or settings of a Zoom meeting after approval.",
+        "Updates the schedule or settings of a Zoom meeting.",
       ),
       writeTool(
         "ZOOM_DELETE_A_MEETING",
         "Delete meeting",
-        "Deletes a Zoom meeting after approval.",
+        "Deletes a Zoom meeting.",
       ),
     ],
   },

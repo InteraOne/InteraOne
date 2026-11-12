@@ -8,14 +8,28 @@ import { runFaqIngestionPipeline } from "../modules/ingestion/pipelines/faq.pipe
 import { vectorStore } from "../infrastructure/vector";
 import { getBullMQConnection } from "../infrastructure/queue/bullmq.client";
 import { getSyncDelay } from "../shared/sync";
-import {
-  acquireUrlLock,
-  releaseUrlLock,
-} from "../shared/locking";
+import { acquireUrlLock, releaseUrlLock } from "../shared/locking";
 import { InternalApiService } from "../infrastructure/api/internal-api.service";
 import logger from "../shared/logger";
 
 export const INGESTION_QUEUE = "document-ingestion";
+
+export function isDeletedKnowledgeError(error: unknown): boolean {
+  const candidate = error as {
+    response?: { status?: number };
+    status?: number;
+    statusCode?: number;
+    message?: string;
+  };
+  return (
+    candidate?.response?.status === 404 ||
+    candidate?.status === 404 ||
+    candidate?.statusCode === 404 ||
+    /(?:status code 404|knowledge document not found)/i.test(
+      candidate?.message || "",
+    )
+  );
+}
 
 export function startKnowledgeIngestionWorker() {
   const connection = getBullMQConnection();
@@ -34,45 +48,65 @@ export function startKnowledgeIngestionWorker() {
     INGESTION_QUEUE,
     async (job) => {
       const { source, jobType } = job.data;
-
-      if (jobType === "delete-vectors") {
-        await vectorStore.deleteByDocumentId(
-          job.data.documentId,
-          job.data.organizationId,
-        );
-        logger.info("Deleted document vectors", {
-          jobId: job.id,
-          queue: INGESTION_QUEUE,
-          documentId: job.data.documentId,
-          organizationId: job.data.organizationId,
-        });
-        return;
-      }
-
-      if (source === "url") {
-        const lockAcquired = await acquireUrlLock(ingestionQueue, job);
-        if (!lockAcquired) return;
-
-        try {
-          await runUrlIngestionPipeline(job.data);
-        } finally {
-          await releaseUrlLock(job.data.documentId);
+      try {
+        if (jobType === "delete-vectors") {
+          await vectorStore.deleteByDocumentId(
+            job.data.documentId,
+            job.data.organizationId,
+          );
+          logger.info("Deleted document vectors", {
+            jobId: job.id,
+            queue: INGESTION_QUEUE,
+            documentId: job.data.documentId,
+            organizationId: job.data.organizationId,
+          });
+          return;
         }
-        return;
-      }
 
-      if (source === "text") {
-        await runTextIngestionPipeline(job.data);
-        return;
-      }
+        if (source === "url") {
+          const lockAcquired = await acquireUrlLock(ingestionQueue, job);
+          if (!lockAcquired) return;
 
-      if (source === "faq") {
-        await runFaqIngestionPipeline(job.data);
-        return;
-      }
+          try {
+            await runUrlIngestionPipeline(job.data);
+          } finally {
+            await releaseUrlLock(job.data.documentId);
+          }
+          return;
+        }
 
-      // pdf / docx
-      await runIngestionPipeline(job.data);
+        if (source === "text") {
+          await runTextIngestionPipeline(job.data);
+          return;
+        }
+
+        if (source === "faq") {
+          await runFaqIngestionPipeline(job.data);
+          return;
+        }
+
+        // pdf / docx
+        await runIngestionPipeline(job.data);
+      } catch (error) {
+        // A source can be deleted while its crawl/embedding job is already
+        // active. That job cannot be removed from BullMQ, and may have written
+        // chunks after the original delete-vectors job ran. A final scoped
+        // cleanup prevents those deleted chunks from becoming live knowledge.
+        if (jobType !== "delete-vectors" && isDeletedKnowledgeError(error)) {
+          await vectorStore.deleteByDocumentId(
+            job.data.documentId,
+            job.data.organizationId,
+          );
+          logger.info("Removed vectors written by a deleted active source", {
+            jobId: job.id,
+            queue: INGESTION_QUEUE,
+            documentId: job.data.documentId,
+            organizationId: job.data.organizationId,
+          });
+          return;
+        }
+        throw error;
+      }
     },
     {
       connection,
@@ -97,7 +131,7 @@ export function startKnowledgeIngestionWorker() {
           job.data.organizationId,
           "ai_sync",
           "Knowledge Base Indexed",
-          `AI training completed for '${job.data.fileName || "Data Source"}'.`
+          `AI training completed for '${job.data.fileName || "Data Source"}'.`,
         );
       } catch (err: any) {
         logger.warn("Failed to send ingestion completed notification", {
@@ -111,7 +145,10 @@ export function startKnowledgeIngestionWorker() {
     if (job.data.jobType !== "delete-vectors" && job.data.source === "url") {
       let doc: any = null;
       try {
-        doc = await InternalApiService.getSyncInfo(job.data.documentId, job.data.organizationId);
+        doc = await InternalApiService.getSyncInfo(
+          job.data.documentId,
+          job.data.organizationId,
+        );
       } catch (err: any) {
         if (err?.response?.status === 404) {
           logger.info("Skipping re-crawl because document was deleted", {
@@ -211,7 +248,7 @@ export function startKnowledgeIngestionWorker() {
           job.data.organizationId,
           "ai_sync",
           "Knowledge Sync Failed",
-          `Failed to index '${job.data.fileName || "Data Source"}'.`
+          `Failed to index '${job.data.fileName || "Data Source"}'.`,
         );
       } catch (notifErr: any) {
         logger.warn("Failed to send ingestion failure notification", {

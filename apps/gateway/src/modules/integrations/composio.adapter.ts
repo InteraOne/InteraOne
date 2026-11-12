@@ -4,7 +4,8 @@ import { AppError } from "@shared/core/errors";
 import { boundedResult, safeIntegrationError } from "./integrations.utils";
 
 let client: Composio | undefined;
-const scopedSessions = new Map<string, any>();
+const SCOPED_SESSION_TTL_MS = 5 * 60 * 1000;
+const scopedSessions = new Map<string, { session: any; expiresAt: number }>();
 
 function assertConfigured(): void {
   if (!config.composio.enabled)
@@ -57,7 +58,8 @@ async function getScopedSession(
 ) {
   const key = scopedSessionKey(params);
   const cached = scopedSessions.get(key);
-  if (cached) return cached;
+  if (cached && cached.expiresAt > Date.now()) return cached.session;
+  if (cached) scopedSessions.delete(key);
 
   const session = await getClient().sessions.create(
     params.composioUserId,
@@ -76,7 +78,14 @@ async function getScopedSession(
     { signal },
   );
 
-  scopedSessions.set(key, session);
+  scopedSessions.set(key, {
+    session,
+    expiresAt: Date.now() + SCOPED_SESSION_TTL_MS,
+  });
+  if (scopedSessions.size > 500) {
+    const oldestKey = scopedSessions.keys().next().value as string | undefined;
+    if (oldestKey) scopedSessions.delete(oldestKey);
+  }
   return session;
 }
 
@@ -188,6 +197,86 @@ export const composioAdapter = {
           name: tool.name,
           description: tool.description,
           toolkitSlug: tool.toolkit!.slug.toLowerCase(),
+          inputParameters: tool.inputParameters,
+          outputParameters: tool.outputParameters,
+        }));
+    });
+  },
+
+  /**
+   * Use Composio's native catalog search to retrieve a small, relevant set of
+   * tools with their complete schemas. The toolkit filter is derived only from
+   * active, policy-enabled connections.
+   */
+  async searchCatalogTools(
+    toolkitSlugs: string[],
+    query: string,
+    limit: number,
+  ) {
+    const composio = getClient();
+    return withTimeout(async (signal) => {
+      const tools = await composio.tools.getRawComposioTools(
+        {
+          toolkits: toolkitSlugs,
+          search: query,
+          important: false,
+          limit,
+        },
+        undefined,
+        { signal },
+      );
+      return tools
+        .filter((tool) => !tool.isDeprecated && tool.toolkit?.slug)
+        .map((tool) => ({
+          slug: tool.slug,
+          name: tool.name,
+          description: tool.description,
+          toolkitSlug: tool.toolkit!.slug.toLowerCase(),
+          inputParameters: tool.inputParameters,
+          outputParameters: tool.outputParameters,
+        }));
+    });
+  },
+
+  async getCatalogTool(toolSlug: string) {
+    const composio = getClient();
+    return withTimeout(async (signal) => {
+      const tools = await composio.tools.getRawComposioTools(
+        { tools: [toolSlug] },
+        undefined,
+        { signal },
+      );
+      const tool = tools.find((candidate) => candidate.slug === toolSlug);
+      if (!tool || !tool.toolkit?.slug) return null;
+      return {
+        slug: tool.slug,
+        name: tool.name,
+        description: tool.description,
+        toolkitSlug: tool.toolkit.slug.toLowerCase(),
+        inputParameters: tool.inputParameters,
+        outputParameters: tool.outputParameters,
+      };
+    });
+  },
+
+  async getCatalogTools(toolSlugs: string[]) {
+    if (toolSlugs.length === 0) return [];
+    const composio = getClient();
+    return withTimeout(async (signal) => {
+      const tools = await composio.tools.getRawComposioTools(
+        { tools: toolSlugs },
+        undefined,
+        { signal },
+      );
+      return tools
+        .filter((tool) => !tool.isDeprecated && tool.toolkit?.slug)
+        .map((tool) => ({
+          slug: tool.slug,
+          name: tool.name,
+          description: tool.description,
+          toolkitSlug: tool.toolkit!.slug.toLowerCase(),
+          inputParameters: tool.inputParameters,
+          outputParameters: tool.outputParameters,
         }));
     });
   },
@@ -301,10 +390,20 @@ export const composioAdapter = {
         },
         signal,
       );
-      const result = await session.execute(params.toolSlug, params.arguments, {
-        account: params.connectedAccountId,
+      const result = await session.execute(
+        params.toolSlug,
+        params.arguments,
+        undefined,
+        { signal },
+      );
+      if (result.error) {
+        throw new Error(result.error);
+      }
+      return boundedResult({
+        status: "success",
+        data: result.data,
+        logId: result.logId,
       });
-      return boundedResult(result);
     });
   },
 };

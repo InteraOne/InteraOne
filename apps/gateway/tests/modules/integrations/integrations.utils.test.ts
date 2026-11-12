@@ -29,7 +29,7 @@ describe("Composio integration policy", () => {
     });
   });
 
-  it("classifies GitHub issue creation as approval-gated write", () => {
+  it("classifies GitHub issue creation as a write", () => {
     expect(getCatalogTool("github", "GITHUB_CREATE_AN_ISSUE")).toMatchObject({
       risk: "write",
       defaultEnabled: false,
@@ -126,7 +126,7 @@ describe("Composio integration policy", () => {
   });
 });
 
-describe("integration approval argument binding", () => {
+describe("integration argument canonicalization", () => {
   it("produces the same hash regardless of object key order", () => {
     const left = canonicalizeArguments({
       repo: "InteraOne",
@@ -142,7 +142,7 @@ describe("integration approval argument binding", () => {
     expect(left.arguments).toEqual(right.arguments);
   });
 
-  it("changes the hash when any approved argument changes", () => {
+  it("changes the hash when any argument changes", () => {
     const original = canonicalizeArguments({ title: "A", body: "first" });
     const changed = canonicalizeArguments({ title: "A", body: "second" });
     expect(original.hash).not.toBe(changed.hash);

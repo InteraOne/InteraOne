@@ -19,6 +19,7 @@ import {
   cleanFinalResponse,
   TOOL_LIMIT_FINAL_RESPONSE_INSTRUCTION,
 } from "../utils/tool-limit";
+import { buildToolInputSchema } from "../utils/tool-schema";
 
 export class OllamaLLMProvider implements LLMProvider {
   readonly name = "ollama";
@@ -151,31 +152,14 @@ export class OllamaLLMProvider implements LLMProvider {
 
     const ollamaTools =
       tools.length > 0
-        ? tools.map((t) => {
-            const properties: Record<string, unknown> = {};
-            const required: string[] = [];
-
-            for (const [k, v] of Object.entries(t.parameters)) {
-              if (k === "organizationId" || k === "conversationId") continue;
-              const paramDef = v as unknown as Record<string, unknown>;
-              const { required: req, ...rest } = paramDef;
-              properties[k] = rest;
-              if (req) required.push(k);
-            }
-
-            return {
+        ? tools.map((t) => ({
               type: "function",
               function: {
                 name: t.name,
                 description: t.description,
-                parameters: {
-                  type: "object",
-                  properties,
-                  ...(required.length > 0 ? { required } : {}),
-                },
+                parameters: buildToolInputSchema(t),
               },
-            };
-          })
+            }))
         : undefined;
 
     const MAX_TOOL_LOOPS = 5;
@@ -334,10 +318,15 @@ export class OllamaLLMProvider implements LLMProvider {
         const stepTimestamp = new Date();
 
         let parsedInput: Record<string, unknown> = {};
+        let inputParseError: string | undefined;
         try {
           parsedInput = JSON.parse(call.function.arguments);
+          if (!parsedInput || typeof parsedInput !== "object" || Array.isArray(parsedInput)) {
+            inputParseError = "Tool arguments must be a JSON object";
+            parsedInput = {};
+          }
         } catch {
-          parsedInput = {};
+          inputParseError = "The model produced invalid JSON tool arguments";
         }
 
         const sanitizedInput = {
@@ -351,6 +340,7 @@ export class OllamaLLMProvider implements LLMProvider {
         };
 
         try {
+          if (inputParseError) throw new Error(inputParseError);
           result = await tool.execute(sanitizedInput, toolContext);
 
           ollamaMessages.push({
@@ -417,8 +407,11 @@ export class OllamaLLMProvider implements LLMProvider {
 
       // Execute tools
       const sequentialTools = ["create_ticket", "update_ticket", "close_ticket", "send_email", "escalate_to_human"];
-      const parallelCalls = toolCalls.filter((c) => !sequentialTools.includes(c.function.name));
-      const sequentialCalls = toolCalls.filter((c) => sequentialTools.includes(c.function.name));
+      const isSequential = (name: string) =>
+        sequentialTools.includes(name) ||
+        tools.find((tool) => tool.name === name)?.executionMode === "sequential";
+      const parallelCalls = toolCalls.filter((c) => !isSequential(c.function.name));
+      const sequentialCalls = toolCalls.filter((c) => isSequential(c.function.name));
 
       // 1. Run parallel read/retrieval tools concurrently
       if (parallelCalls.length > 0) {

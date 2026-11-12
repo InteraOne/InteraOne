@@ -17,6 +17,7 @@ import {
   cleanFinalResponse,
   TOOL_LIMIT_FINAL_RESPONSE_INSTRUCTION,
 } from "../utils/tool-limit";
+import { buildToolInputSchema } from "../utils/tool-schema";
 
 export class HuggingFaceLLMProvider implements LLMProvider {
   readonly name = "huggingface";
@@ -133,31 +134,14 @@ export class HuggingFaceLLMProvider implements LLMProvider {
 
     const hfTools =
       tools.length > 0
-        ? tools.map((t) => {
-            const properties: Record<string, unknown> = {};
-            const required: string[] = [];
-
-            for (const [k, v] of Object.entries(t.parameters)) {
-              if (k === "organizationId" || k === "conversationId") continue;
-              const paramDef = v as unknown as Record<string, unknown>;
-              const { required: req, ...rest } = paramDef;
-              properties[k] = rest;
-              if (req) required.push(k);
-            }
-
-            return {
-              type: "function",
-              function: {
-                name: t.name,
-                description: t.description,
-                parameters: {
-                  type: "object",
-                  properties,
-                  ...(required.length > 0 ? { required } : {}),
-                },
-              },
-            };
-          })
+        ? tools.map((t) => ({
+            type: "function",
+            function: {
+              name: t.name,
+              description: t.description,
+              parameters: buildToolInputSchema(t),
+            },
+          }))
         : undefined;
 
     const hfMessages: any[] = messages.map((m) => ({
@@ -182,6 +166,9 @@ export class HuggingFaceLLMProvider implements LLMProvider {
       };
       if (hfTools) {
         payload.tools = hfTools;
+        if (options.requireToolCall && loop === 1) {
+          payload.tool_choice = "required";
+        }
       }
 
       let toolCalls: Array<{
@@ -378,7 +365,9 @@ export class HuggingFaceLLMProvider implements LLMProvider {
         })),
       });
 
-      const executeSingleToolCall = async (call: typeof toolCalls[number]) => {
+      const executeSingleToolCall = async (
+        call: (typeof toolCalls)[number],
+      ) => {
         const tool = tools.find((t) => t.name === call.function.name);
         if (!tool) return;
 
@@ -397,10 +386,19 @@ export class HuggingFaceLLMProvider implements LLMProvider {
         const stepTimestamp = new Date();
 
         let parsedInput: Record<string, unknown> = {};
+        let inputParseError: string | undefined;
         try {
           parsedInput = JSON.parse(call.function.arguments);
+          if (
+            !parsedInput ||
+            typeof parsedInput !== "object" ||
+            Array.isArray(parsedInput)
+          ) {
+            inputParseError = "Tool arguments must be a JSON object";
+            parsedInput = {};
+          }
         } catch {
-          parsedInput = {};
+          inputParseError = "The model produced invalid JSON tool arguments";
         }
 
         const sanitizedInput = {
@@ -414,6 +412,7 @@ export class HuggingFaceLLMProvider implements LLMProvider {
         };
 
         try {
+          if (inputParseError) throw new Error(inputParseError);
           result = await tool.execute(sanitizedInput, toolContext);
 
           hfMessages.push({
@@ -483,13 +482,28 @@ export class HuggingFaceLLMProvider implements LLMProvider {
       };
 
       // Execute tools
-      const sequentialTools = ["create_ticket", "update_ticket", "close_ticket", "send_email", "escalate_to_human"];
-      const parallelCalls = toolCalls.filter((c) => !sequentialTools.includes(c.function.name));
-      const sequentialCalls = toolCalls.filter((c) => sequentialTools.includes(c.function.name));
+      const sequentialTools = [
+        "create_ticket",
+        "update_ticket",
+        "close_ticket",
+        "send_email",
+        "escalate_to_human",
+      ];
+      const isSequential = (name: string) =>
+        sequentialTools.includes(name) ||
+        tools.find((tool) => tool.name === name)?.executionMode === "sequential";
+      const parallelCalls = toolCalls.filter(
+        (c) => !isSequential(c.function.name),
+      );
+      const sequentialCalls = toolCalls.filter((c) =>
+        isSequential(c.function.name),
+      );
 
       // 1. Run parallel read/retrieval tools concurrently
       if (parallelCalls.length > 0) {
-        await Promise.all(parallelCalls.map((call) => executeSingleToolCall(call)));
+        await Promise.all(
+          parallelCalls.map((call) => executeSingleToolCall(call)),
+        );
       }
 
       // 2. Run sequential write/mutation tools

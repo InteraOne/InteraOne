@@ -20,6 +20,12 @@ export interface Tool {
   readonly description: string;
 
   readonly parameters: Record<string, ToolParameterSchema>;
+  /** Native JSON Schema. Prefer this over `parameters` when available. */
+  readonly inputSchema?: Record<string, unknown>;
+  /** Optional native result schema, retained for diagnostics and future routing. */
+  readonly outputSchema?: Record<string, unknown>;
+  /** Mutations run in model order; independent reads may run concurrently. */
+  readonly executionMode?: "parallel" | "sequential";
   execute(
     args: Record<string, unknown>,
     context?: ToolExecutionContext,
@@ -31,4 +37,8 @@ export interface ToolFilterOptions {
   channel?: "widget" | "email" | "whatsapp" | "telegram";
   organizationId?: string;
   conversationId?: string;
+  /** Current conversational intent used to retrieve only relevant connected tools. */
+  query?: string;
+  /** Current user turn, used to distinguish commands from historical context. */
+  request?: string;
 }
