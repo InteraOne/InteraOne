@@ -21,6 +21,7 @@ export const integrationsSchema = {
     page: Joi.number().integer().min(1).max(10000).optional(),
     limit: Joi.number().integer().min(1).max(48).optional(),
     search: Joi.string().trim().max(120).allow("").optional(),
+    category: Joi.string().trim().max(80).allow("").optional(),
   }),
   toolkitParams: Joi.object({
     toolkit: Joi.string().trim().lowercase().min(1).max(80).required(),
