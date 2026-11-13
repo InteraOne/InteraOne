@@ -22,6 +22,7 @@ export interface IntegrationToolkit extends IntegrationToolkitSummary {
     description: string;
     risk: ToolRisk;
     defaultEnabled: boolean;
+    requiresApproval: boolean;
   }>;
 }
 

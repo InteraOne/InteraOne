@@ -14,10 +14,15 @@ import { estimateCost } from "../observability/cost-tracker";
 import { LatencyTracker } from "../observability/latency-tracker";
 import { TokenTracker } from "../observability/token-tracker";
 import {
-  cleanFinalResponse,
+  cleanAssistantResponse,
   TOOL_LIMIT_FINAL_RESPONSE_INSTRUCTION,
 } from "../utils/tool-limit";
 import { buildToolInputSchema } from "../utils/tool-schema";
+import {
+  executeToolBatch,
+  MAX_TOOL_LOOPS,
+  toolOutcomeContent,
+} from "../../../modules/agents/tool-loop";
 
 export class OpenAILLMProvider implements LLMProvider {
   readonly name = "openai";
@@ -140,22 +145,6 @@ export class OpenAILLMProvider implements LLMProvider {
       onToolEvent,
     } = options;
 
-    const toolLabels: Record<string, string> = {
-      faq_retrieval: "Searching FAQs",
-      knowledge_retrieval: "Searching uploaded knowledge",
-      web_crawl: "Searching web",
-      conversation_memory: "Checking conversation history",
-      seek_contact: "Looking up contact",
-      create_ticket: "Creating ticket",
-      update_ticket: "Updating ticket",
-      close_ticket: "Closing ticket",
-      send_email: "Sending email",
-      escalate_to_human: "Connecting to human agent",
-      verify_email_otp: "Verifying code",
-      update_contact_profile: "Saving contact details",
-      mark_query_resolved: "Marking query resolved",
-    };
-
     const openaiTools =
       tools.length > 0
         ? tools.map((t) => ({
@@ -173,7 +162,6 @@ export class OpenAILLMProvider implements LLMProvider {
       content: m.content,
     }));
 
-    const MAX_TOOL_LOOPS = 5;
     const steps: LLMGenerateStep[] = [];
     let loop = 0;
     let responseText = "";
@@ -225,7 +213,7 @@ export class OpenAILLMProvider implements LLMProvider {
 
               // Whitespace-only deltas are meaningful boundaries between
               // tokens/paragraphs and must remain in the visible stream.
-              if (cleanText.length > 0) {
+              if (tools.length === 0 && cleanText.length > 0) {
                 onStream(cleanText, false);
               }
             }
@@ -313,12 +301,13 @@ export class OpenAILLMProvider implements LLMProvider {
       toolCalls = toolCalls.filter(Boolean);
 
       if (toolCalls.length === 0) {
-        const cleanText = responseText
-          .replace(/<thinking>[\s\S]*?<\/thinking>/gi, "")
-          .replace(/<thought>[\s\S]*?<\/thought>/gi, "")
-          .replace(/<(thinking|thought)>[\s\S]*$/gi, "")
-          .replace(/<\/?(?:thinking|thought)>/gi, "")
-          .trim();
+        const cleanText = cleanAssistantResponse(
+          responseText,
+          tools.map((tool) => tool.name),
+        );
+        if (onStream && tools.length > 0 && cleanText) {
+          onStream(cleanText, false);
+        }
 
         return {
           text: cleanText || "Sorry, I could not generate a response.",
@@ -341,150 +330,25 @@ export class OpenAILLMProvider implements LLMProvider {
         })),
       });
 
-      const executeSingleToolCall = async (
-        call: (typeof toolCalls)[number],
-      ) => {
-        const tool = tools.find((t) => t.name === call.function.name);
-        if (!tool) return;
-
-        const toolMeta = toolLabels[call.function.name] || "Working on it";
-
-        if (onToolEvent) {
-          onToolEvent({
-            type: "start",
-            toolName: call.function.name,
-            label: toolMeta,
-          });
-        }
-
-        let result: unknown;
-        let stepError: string | undefined;
-        const stepTimestamp = new Date();
-
-        let parsedInput: Record<string, unknown> = {};
-        let inputParseError: string | undefined;
-        try {
-          parsedInput = JSON.parse(call.function.arguments);
-          if (
-            !parsedInput ||
-            typeof parsedInput !== "object" ||
-            Array.isArray(parsedInput)
-          ) {
-            inputParseError = "Tool arguments must be a JSON object";
-            parsedInput = {};
-          }
-        } catch {
-          inputParseError = "The model produced invalid JSON tool arguments";
-        }
-
-        const sanitizedInput = {
-          ...parsedInput,
-          ...(toolContext?.conversationId
-            ? { conversationId: toolContext.conversationId }
-            : {}),
-          ...(toolContext?.organizationId
-            ? { organizationId: toolContext.organizationId }
-            : {}),
-        };
-
-        try {
-          if (inputParseError) throw new Error(inputParseError);
-          result = await tool.execute(sanitizedInput, toolContext);
-
-          openAIMessages.push({
-            role: "tool",
-            tool_call_id: call.id,
-            name: call.function.name,
-            content:
-              typeof result === "string" ? result : JSON.stringify(result),
-          });
-
-          if (onToolEvent) {
-            let detail: string | undefined;
-            if (
-              (call.function.name === "faq_retrieval" ||
-                call.function.name === "knowledge_retrieval") &&
-              result &&
-              typeof result === "object"
-            ) {
-              const r = result as any;
-              if (r.results && Array.isArray(r.results)) {
-                detail = `Retrieved ${r.results.length} document${r.results.length !== 1 ? "s" : ""}`;
-              }
-            } else if (
-              call.function.name === "create_ticket" &&
-              result &&
-              typeof result === "object"
-            ) {
-              const r = result as any;
-              if (r.ticketNumber) detail = `Ticket ${r.ticketNumber}`;
-            }
-
-            onToolEvent({
-              type: "complete",
-              toolName: call.function.name,
-              label: toolMeta,
-              detail,
-            });
-          }
-        } catch (e: unknown) {
-          stepError = e instanceof Error ? e.message : String(e);
-          result = { error: stepError };
-
-          openAIMessages.push({
-            role: "tool",
-            tool_call_id: call.id,
-            name: call.function.name,
-            content: JSON.stringify({ error: stepError }),
-          });
-
-          if (onToolEvent) {
-            onToolEvent({
-              type: "complete",
-              toolName: call.function.name,
-              label: toolMeta,
-              detail: "Failed",
-            });
-          }
-        }
-
-        steps.push({
-          toolName: call.function.name,
-          args: sanitizedInput,
-          result,
-          error: stepError,
-          timestamp: stepTimestamp,
+      const outcomes = await executeToolBatch({
+        calls: toolCalls.map((call) => ({
+          id: call.id,
+          name: call.function.name,
+          input: call.function.arguments,
+        })),
+        tools,
+        context: toolContext,
+        onToolEvent,
+      });
+      for (const outcome of outcomes) {
+        if (!outcome.deferred) options.onToolStep?.(outcome.step);
+        openAIMessages.push({
+          role: "tool",
+          tool_call_id: outcome.call.id,
+          name: outcome.call.name,
+          content: toolOutcomeContent(outcome),
         });
-      };
-
-      // Execute tools
-      const sequentialTools = [
-        "create_ticket",
-        "update_ticket",
-        "close_ticket",
-        "send_email",
-        "escalate_to_human",
-      ];
-      const isSequential = (name: string) =>
-        sequentialTools.includes(name) ||
-        tools.find((tool) => tool.name === name)?.executionMode === "sequential";
-      const parallelCalls = toolCalls.filter(
-        (c) => !isSequential(c.function.name),
-      );
-      const sequentialCalls = toolCalls.filter((c) =>
-        isSequential(c.function.name),
-      );
-
-      // 1. Run parallel read/retrieval tools concurrently
-      if (parallelCalls.length > 0) {
-        await Promise.all(
-          parallelCalls.map((call) => executeSingleToolCall(call)),
-        );
-      }
-
-      // 2. Run sequential write/mutation tools
-      for (const call of sequentialCalls) {
-        await executeSingleToolCall(call);
+        if (!outcome.deferred) steps.push(outcome.step);
       }
     }
 
@@ -514,7 +378,7 @@ export class OpenAILLMProvider implements LLMProvider {
         const content = chunk.choices?.[0]?.delta?.content;
         if (content) {
           responseText += content;
-          onStream(content, false);
+          if (tools.length === 0) onStream(content, false);
         }
         if (chunk.usage) {
           tokenTracker.accumulate({
@@ -541,7 +405,13 @@ export class OpenAILLMProvider implements LLMProvider {
       }
     }
 
-    const finalCleanText = cleanFinalResponse(responseText);
+    const finalCleanText = cleanAssistantResponse(
+      responseText,
+      tools.map((tool) => tool.name),
+    );
+    if (onStream && tools.length > 0 && finalCleanText) {
+      onStream(finalCleanText, false);
+    }
 
     return {
       text:

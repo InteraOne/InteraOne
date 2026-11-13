@@ -8,16 +8,16 @@ const param = (value: string | string[] | undefined): string =>
   Array.isArray(value) ? value[0] : value || "";
 
 export const IntegrationsController = {
-  agentTools: asyncHandler(async (req: Request, res: Response) =>
+  agentSession: asyncHandler(async (req: Request, res: Response) =>
     sendResponse(
       res,
       200,
       true,
-      "Agent integration tools discovered",
-      await service.discoverAgentTools(
-        String(req.query.organizationId),
-        String(req.query.query),
-        String(req.query.channel || "widget"),
+      "Agent integration session opened",
+      await service.openAgentSession(
+        req.body.organizationId,
+        req.body.conversationId,
+        req.body.channel || "widget",
       ),
     ),
   ),
@@ -27,7 +27,11 @@ export const IntegrationsController = {
       200,
       true,
       "Agent integration action handled",
-      await service.requestAgentExecution(req.body.organizationId, req.body),
+      await service.executeAgentTool(
+        req.body.organizationId,
+        req.body.conversationId,
+        req.body,
+      ),
     ),
   ),
   catalog: asyncHandler(async (req: AuthenticatedRequest, res: Response) =>
@@ -85,10 +89,7 @@ export const IntegrationsController = {
         200,
         true,
         "Integration connections retrieved",
-        await service.listConnections(
-          req.user.activeOrganizationId,
-          req.user.userId,
-        ),
+        await service.listConnections(req.user.activeOrganizationId),
       ),
   ),
   connect: asyncHandler(async (req: AuthenticatedRequest, res: Response) =>
@@ -127,19 +128,6 @@ export const IntegrationsController = {
         req.user.activeOrganizationId,
         req.user.userId,
         param(req.params.connectionId),
-      ),
-    ),
-  ),
-  execute: asyncHandler(async (req: AuthenticatedRequest, res: Response) =>
-    sendResponse(
-      res,
-      200,
-      true,
-      "Integration action handled",
-      await service.requestExecution(
-        req.user.activeOrganizationId,
-        req.user.userId,
-        req.body,
       ),
     ),
   ),

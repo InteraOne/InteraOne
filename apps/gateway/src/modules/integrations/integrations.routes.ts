@@ -11,15 +11,15 @@ import { integrationsSchema } from "./integrations.schema";
 
 export const integrationsRouter = Router();
 
-// Existing AI service integration: dynamic discovery + policy-checked execution.
-integrationsRouter.get(
-  "/ai/tools",
+// The AI service receives only native, tenant-scoped Composio session tools.
+integrationsRouter.post(
+  "/ai/session",
   validateAiSecret,
-  validateRequest(integrationsSchema.agentDiscoveryQuery, "query"),
-  IntegrationsController.agentTools,
+  validateRequest(integrationsSchema.agentSession),
+  IntegrationsController.agentSession,
 );
 integrationsRouter.post(
-  "/ai/tools/execute",
+  "/ai/session/execute",
   validateAiSecret,
   validateRequest(integrationsSchema.agentExecute),
   IntegrationsController.agentExecute,
@@ -57,9 +57,4 @@ integrationsRouter.delete(
   "/connections/:connectionId",
   validateRequest(integrationsSchema.connectionParams, "params"),
   IntegrationsController.disconnect,
-);
-integrationsRouter.post(
-  "/tools/execute",
-  validateRequest(integrationsSchema.execute),
-  IntegrationsController.execute,
 );

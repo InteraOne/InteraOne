@@ -21,6 +21,7 @@ export interface ToolEventData {
   toolName: string;
   label: string;
   detail?: string;
+  status?: "succeeded" | "failed";
 }
 
 export interface StreamPayload {
@@ -32,17 +33,18 @@ export interface StreamPayload {
   toolEvent?: ToolEventData;
 }
 
-
-
 export async function publishResponse(payload: PublishPayload): Promise<void> {
-  await pubsubRedis.publish(PUBSUB_CHANNEL, JSON.stringify({ ...payload, nonce: randomUUID() }));
+  await pubsubRedis.publish(
+    PUBSUB_CHANNEL,
+    JSON.stringify({ ...payload, nonce: randomUUID() }),
+  );
 }
 
-
-
-
-
-
-export async function publishStreamChunk(payload: StreamPayload): Promise<void> {
-  await pubsubRedis.publish(STREAM_CHANNEL, JSON.stringify({ ...payload, nonce: randomUUID() }));
+export async function publishStreamChunk(
+  payload: StreamPayload,
+): Promise<void> {
+  await pubsubRedis.publish(
+    STREAM_CHANNEL,
+    JSON.stringify({ ...payload, nonce: randomUUID() }),
+  );
 }

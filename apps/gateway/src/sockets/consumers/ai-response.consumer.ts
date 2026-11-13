@@ -4,7 +4,10 @@ import { ChannelService } from "@modules/channels/channels.service";
 import { incrementMessageUsage } from "@shared/security/middleware";
 import { resolveUsagePeriodAndReset } from "@shared/security/middleware/rate-limit";
 import { resolveOrganizationPlan } from "@shared/ee";
-import { enqueueUsageThresholdWarningEmail, enqueueUsageExhaustedEmail } from "@shared/queues/email.queue";
+import {
+  enqueueUsageThresholdWarningEmail,
+  enqueueUsageExhaustedEmail,
+} from "@shared/queues/email.queue";
 import { tracker } from "@shared/utils/tracker";
 import logger from "@shared/core/logger";
 import { socketService } from "../services/socket.service";
@@ -73,8 +76,10 @@ export async function startAIResponseConsumer(): Promise<void> {
         organizationId,
         usageResult.used,
         usageResult.limit,
-        usageResult.blocked
-      ).catch((err) => logger.error("[AI Response] Error handling threshold emails:", err));
+        usageResult.blocked,
+      ).catch((err) =>
+        logger.error("[AI Response] Error handling threshold emails:", err),
+      );
 
       if (usageResult.blocked) {
         logger.warn(
@@ -185,6 +190,7 @@ export async function startAIResponseConsumer(): Promise<void> {
             toolName: string;
             label: string;
             detail?: string;
+            status?: "succeeded" | "failed";
           };
         };
 
@@ -222,7 +228,7 @@ async function handleUsageThresholdEmails(
   organizationId: string,
   used: number,
   limit: number | null,
-  blocked: boolean
+  blocked: boolean,
 ): Promise<void> {
   if (limit === null) return;
 
@@ -234,7 +240,10 @@ async function handleUsageThresholdEmails(
 
   try {
     const plan = await resolveOrganizationPlan(organizationId);
-    const { period, resetAt } = await resolveUsagePeriodAndReset(organizationId, plan);
+    const { period, resetAt } = await resolveUsagePeriodAndReset(
+      organizationId,
+      plan,
+    );
 
     const type = is100 ? "100pct" : "90pct";
     const cacheKey = `usage:warned:${type}:${organizationId}:${period}`;
@@ -265,7 +274,7 @@ async function handleUsageThresholdEmails(
         ownerUser.name,
         used,
         limit,
-        resetDateStr
+        resetDateStr,
       );
       if (queued) {
         await redisClient.set(cacheKey, "1", { EX: 35 * 24 * 60 * 60 });
@@ -277,14 +286,16 @@ async function handleUsageThresholdEmails(
         pct,
         used,
         limit,
-        resetDateStr
+        resetDateStr,
       );
       if (queued) {
         await redisClient.set(cacheKey, "1", { EX: 35 * 24 * 60 * 60 });
       }
     }
   } catch (err) {
-    logger.error("[handleUsageThresholdEmails] Failed to send usage threshold email:", err);
+    logger.error(
+      "[handleUsageThresholdEmails] Failed to send usage threshold email:",
+      err,
+    );
   }
 }
-

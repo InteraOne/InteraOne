@@ -12,6 +12,7 @@ export interface IIntegrationConnection extends Document {
   organizationId: Types.ObjectId;
   createdBy: Types.ObjectId;
   composioUserId: string;
+  composioSessionId?: string | null;
   toolkitSlug: string;
   connectedAccountId: string;
   status: IntegrationConnectionStatus;
@@ -24,11 +25,43 @@ export interface IIntegrationConnection extends Document {
 
 const integrationConnectionSchema = new Schema<IIntegrationConnection>(
   {
-    organizationId: { type: Schema.Types.ObjectId, ref: "Organization", required: true, index: true },
-    createdBy: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
-    composioUserId: { type: String, required: true, maxlength: 256, select: false },
-    toolkitSlug: { type: String, required: true, lowercase: true, trim: true, maxlength: 80 },
-    connectedAccountId: { type: String, required: true, trim: true, maxlength: 256 },
+    organizationId: {
+      type: Schema.Types.ObjectId,
+      ref: "Organization",
+      required: true,
+      index: true,
+    },
+    createdBy: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+      index: true,
+    },
+    composioUserId: {
+      type: String,
+      required: true,
+      maxlength: 256,
+      select: false,
+    },
+    composioSessionId: {
+      type: String,
+      default: null,
+      maxlength: 256,
+      select: false,
+    },
+    toolkitSlug: {
+      type: String,
+      required: true,
+      lowercase: true,
+      trim: true,
+      maxlength: 80,
+    },
+    connectedAccountId: {
+      type: String,
+      required: true,
+      trim: true,
+      maxlength: 256,
+    },
     status: {
       type: String,
       enum: ["pending", "active", "expired", "disconnected", "error"],
@@ -46,7 +79,11 @@ integrationConnectionSchema.index(
   { organizationId: 1, createdBy: 1, toolkitSlug: 1, connectedAccountId: 1 },
   { unique: true, name: "unique_integration_connection" },
 );
-integrationConnectionSchema.index({ organizationId: 1, toolkitSlug: 1, status: 1 });
+integrationConnectionSchema.index({
+  organizationId: 1,
+  toolkitSlug: 1,
+  status: 1,
+});
 
 export const IntegrationConnection = mongoose.model<IIntegrationConnection>(
   "IntegrationConnection",

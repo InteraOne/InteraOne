@@ -3,17 +3,18 @@ import Joi from "joi";
 const slug = Joi.string().trim().min(1).max(160);
 
 export const integrationsSchema = {
-  agentDiscoveryQuery: Joi.object({
+  agentSession: Joi.object({
     organizationId: Joi.string().hex().length(24).required(),
-    query: Joi.string().trim().min(1).max(2000).required(),
+    conversationId: Joi.string().hex().length(24).required(),
     channel: Joi.string()
       .valid("widget", "email", "whatsapp", "telegram")
       .default("widget"),
   }),
   agentExecute: Joi.object({
     organizationId: Joi.string().hex().length(24).required(),
-    connectionId: Joi.string().hex().length(24).required(),
-    toolSlug: slug.required(),
+    conversationId: Joi.string().hex().length(24).required(),
+    sessionId: Joi.string().hex().length(24).required(),
+    toolName: slug.required(),
     arguments: Joi.object().default({}).required(),
   }),
   catalogQuery: Joi.object({
@@ -26,11 +27,6 @@ export const integrationsSchema = {
   }),
   connectionParams: Joi.object({
     connectionId: Joi.string().hex().length(24).required(),
-  }),
-  execute: Joi.object({
-    connectionId: Joi.string().hex().length(24).required(),
-    toolSlug: slug.required(),
-    arguments: Joi.object().default({}).required(),
   }),
   updatePolicy: Joi.object({
     enabled: Joi.boolean().required(),

@@ -31,6 +31,7 @@ export interface ToolEventData {
   toolName: string;
   label: string;
   detail?: string;
+  status?: "succeeded" | "failed";
 }
 
 export interface LLMOptions {
@@ -43,6 +44,8 @@ export interface LLMOptions {
   toolContext?: ToolExecutionContext;
   onStream?: (chunk: string, isThought?: boolean) => void;
   onToolEvent?: (event: ToolEventData) => void;
+  /** Reports durable tool progress even if generation fails afterwards. */
+  onToolStep?: (step: LLMGenerateStep) => void;
 }
 
 export interface LLMTokenUsage {

@@ -14,10 +14,23 @@ export interface ToolExecutionContext {
   messageId?: string;
 }
 
+export class ToolExecutionError extends Error {
+  constructor(
+    message: string,
+    readonly result: unknown,
+  ) {
+    super(message);
+    this.name = "ToolExecutionError";
+  }
+}
+
 export interface Tool {
   readonly name: string;
 
   readonly description: string;
+
+  /** Origin used for orchestration and result verification. */
+  readonly source?: "builtin" | "composio";
 
   readonly parameters: Record<string, ToolParameterSchema>;
   /** Native JSON Schema. Prefer this over `parameters` when available. */
@@ -37,8 +50,4 @@ export interface ToolFilterOptions {
   channel?: "widget" | "email" | "whatsapp" | "telegram";
   organizationId?: string;
   conversationId?: string;
-  /** Current conversational intent used to retrieve only relevant connected tools. */
-  query?: string;
-  /** Current user turn, used to distinguish commands from historical context. */
-  request?: string;
 }

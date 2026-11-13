@@ -1,25 +1,41 @@
-import { Composio, SessionPreset } from "@composio/core";
+import {
+  Composio,
+  ComposioToolInputRequiredError,
+  ToolRouterSessionMetaToolSlug,
+} from "@composio/core";
 import config from "@shared/infra/config";
 import { AppError } from "@shared/core/errors";
-import { boundedResult, safeIntegrationError } from "./integrations.utils";
+import { safeIntegrationError } from "./integrations.utils";
+
+export interface NativeSessionTool {
+  name: string;
+  description: string;
+  inputSchema: Record<string, unknown>;
+}
+
+export interface SessionPolicyConfig {
+  toolkitSlugs: string[];
+  tools: Record<string, { enable: string[]; requireApproval?: string[] }>;
+  connectedAccounts: Record<string, string[]>;
+}
 
 let client: Composio | undefined;
-const SCOPED_SESSION_TTL_MS = 5 * 60 * 1000;
-const scopedSessions = new Map<string, { session: any; expiresAt: number }>();
 
 function assertConfigured(): void {
-  if (!config.composio.enabled)
+  if (!config.composio.enabled) {
     throw new AppError(
       "Composio integrations are disabled",
       503,
       "COMPOSIO_DISABLED",
     );
-  if (!config.composio.apiKey)
+  }
+  if (!config.composio.apiKey) {
     throw new AppError(
       "Composio is not configured",
       503,
       "COMPOSIO_NOT_CONFIGURED",
     );
+  }
 }
 
 function getClient(): Composio {
@@ -33,62 +49,6 @@ function getClient(): Composio {
   return client;
 }
 
-function scopedSessionKey(params: {
-  composioUserId: string;
-  toolkitSlug: string;
-  connectedAccountId: string;
-  allowedToolSlugs: string[];
-}): string {
-  return [
-    params.composioUserId,
-    params.toolkitSlug,
-    params.connectedAccountId,
-    ...[...params.allowedToolSlugs].sort(),
-  ].join(":");
-}
-
-async function getScopedSession(
-  params: {
-    composioUserId: string;
-    toolkitSlug: string;
-    connectedAccountId: string;
-    allowedToolSlugs: string[];
-  },
-  signal: AbortSignal,
-) {
-  const key = scopedSessionKey(params);
-  const cached = scopedSessions.get(key);
-  if (cached && cached.expiresAt > Date.now()) return cached.session;
-  if (cached) scopedSessions.delete(key);
-
-  const session = await getClient().sessions.create(
-    params.composioUserId,
-    {
-      sessionPreset: SessionPreset.DIRECT_TOOLS,
-      toolkits: [params.toolkitSlug],
-      tools: {
-        [params.toolkitSlug]: { enable: params.allowedToolSlugs },
-      },
-      connectedAccounts: {
-        [params.toolkitSlug]: [params.connectedAccountId],
-      },
-      manageConnections: false,
-      sandbox: { enable: false },
-    },
-    { signal },
-  );
-
-  scopedSessions.set(key, {
-    session,
-    expiresAt: Date.now() + SCOPED_SESSION_TTL_MS,
-  });
-  if (scopedSessions.size > 500) {
-    const oldestKey = scopedSessions.keys().next().value as string | undefined;
-    if (oldestKey) scopedSessions.delete(oldestKey);
-  }
-  return session;
-}
-
 async function withTimeout<T>(
   operation: (signal: AbortSignal) => Promise<T>,
 ): Promise<T> {
@@ -97,6 +57,7 @@ async function withTimeout<T>(
   try {
     return await operation(controller.signal);
   } catch (error) {
+    if (error instanceof ComposioToolInputRequiredError) throw error;
     throw new AppError(
       safeIntegrationError(error),
       502,
@@ -107,15 +68,40 @@ async function withTimeout<T>(
   }
 }
 
-export function buildComposioUserId(
-  organizationId: string,
-  userId: string,
-): string {
+export function buildComposioUserId(organizationId: string): string {
   const environment = config.composio.environment.replace(
     /[^a-zA-Z0-9_-]/g,
     "-",
   );
-  return `interaone:${environment}:${organizationId}:${userId}`;
+  return `interaone:${environment}:organization:${organizationId}`;
+}
+
+function nativeTools(tools: unknown): NativeSessionTool[] {
+  if (!Array.isArray(tools)) {
+    throw new AppError("Composio returned an invalid session tool set", 502);
+  }
+  return tools.map((value) => {
+    const tool = value as {
+      type?: string;
+      function?: {
+        name?: string;
+        description?: string;
+        parameters?: Record<string, unknown>;
+      };
+    };
+    if (
+      tool.type !== "function" ||
+      !tool.function?.name ||
+      !tool.function.parameters
+    ) {
+      throw new AppError("Composio returned an invalid meta-tool schema", 502);
+    }
+    return {
+      name: tool.function.name,
+      description: tool.function.description || tool.function.name,
+      inputSchema: tool.function.parameters,
+    };
+  });
 }
 
 export const composioAdapter = {
@@ -125,146 +111,45 @@ export const composioAdapter = {
 
   async listToolkits() {
     return withTimeout(async (signal) => {
-      const toolkits: Array<{
-        slug: string;
-        name: string;
-        meta?: {
-          description?: string;
-          logo?: string;
-          tools_count?: number;
-          categories?: Array<{ name?: string }>;
-        };
-      }> = [];
-      let cursor: string | undefined;
-      do {
-        const query = new URLSearchParams({
-          managed_by: "all",
-          sort_by: "usage",
-          limit: "1000",
-        });
-        if (cursor) query.set("cursor", cursor);
-        const response = await fetch(
-          `https://backend.composio.dev/api/v3.1/toolkits?${query.toString()}`,
-          {
-            headers: { "x-api-key": config.composio.apiKey! },
-            signal,
-          },
-        );
-        if (!response.ok) {
-          throw new Error(
-            `Composio toolkit catalog returned ${response.status}`,
-          );
-        }
-        const page = (await response.json()) as {
-          items?: typeof toolkits;
-          next_cursor?: string | null;
-        };
-        toolkits.push(...(page.items ?? []));
-        cursor = page.next_cursor || undefined;
-      } while (cursor);
-
+      const toolkits = await getClient().toolkits.get(
+        { managedBy: "all", sortBy: "usage", limit: 1000 },
+        { signal },
+      );
       return toolkits
-        .filter((toolkit) => (toolkit.meta?.tools_count ?? 0) > 0)
+        .filter((toolkit) => (toolkit.meta.toolsCount ?? 0) > 0)
         .map((toolkit) => ({
           slug: toolkit.slug.toLowerCase(),
           name: toolkit.name,
           description:
-            toolkit.meta?.description ||
+            toolkit.meta.description ||
             `Connect ${toolkit.name} through Composio.`,
-          logo: toolkit.meta?.logo,
-          category: toolkit.meta?.categories?.[0]?.name || "Productivity",
-          toolsCount: toolkit.meta?.tools_count ?? 0,
+          logo: toolkit.meta.logo,
+          category: toolkit.meta.categories?.[0]?.name || "Productivity",
+          toolsCount: toolkit.meta.toolsCount ?? 0,
         }));
     });
   },
 
-  async listCatalogTools(toolkitSlugs: string[]) {
-    const composio = getClient();
+  async getToolkit(toolkitSlug: string) {
     return withTimeout(async (signal) => {
-      const tools = await composio.tools.getRawComposioTools(
-        {
-          toolkits: toolkitSlugs,
-          important: false,
-          limit: 1000,
-        },
-        undefined,
-        { signal },
-      );
-      return tools
-        .filter((tool) => !tool.isDeprecated && tool.toolkit?.slug)
-        .map((tool) => ({
-          slug: tool.slug,
-          name: tool.name,
-          description: tool.description,
-          toolkitSlug: tool.toolkit!.slug.toLowerCase(),
-          inputParameters: tool.inputParameters,
-          outputParameters: tool.outputParameters,
-        }));
-    });
-  },
-
-  /**
-   * Use Composio's native catalog search to retrieve a small, relevant set of
-   * tools with their complete schemas. The toolkit filter is derived only from
-   * active, policy-enabled connections.
-   */
-  async searchCatalogTools(
-    toolkitSlugs: string[],
-    query: string,
-    limit: number,
-  ) {
-    const composio = getClient();
-    return withTimeout(async (signal) => {
-      const tools = await composio.tools.getRawComposioTools(
-        {
-          toolkits: toolkitSlugs,
-          search: query,
-          important: false,
-          limit,
-        },
-        undefined,
-        { signal },
-      );
-      return tools
-        .filter((tool) => !tool.isDeprecated && tool.toolkit?.slug)
-        .map((tool) => ({
-          slug: tool.slug,
-          name: tool.name,
-          description: tool.description,
-          toolkitSlug: tool.toolkit!.slug.toLowerCase(),
-          inputParameters: tool.inputParameters,
-          outputParameters: tool.outputParameters,
-        }));
-    });
-  },
-
-  async getCatalogTool(toolSlug: string) {
-    const composio = getClient();
-    return withTimeout(async (signal) => {
-      const tools = await composio.tools.getRawComposioTools(
-        { tools: [toolSlug] },
-        undefined,
-        { signal },
-      );
-      const tool = tools.find((candidate) => candidate.slug === toolSlug);
-      if (!tool || !tool.toolkit?.slug) return null;
+      const toolkit = await getClient().toolkits.get(toolkitSlug, { signal });
       return {
-        slug: tool.slug,
-        name: tool.name,
-        description: tool.description,
-        toolkitSlug: tool.toolkit.slug.toLowerCase(),
-        inputParameters: tool.inputParameters,
-        outputParameters: tool.outputParameters,
+        slug: toolkit.slug.toLowerCase(),
+        name: toolkit.name,
+        description:
+          toolkit.meta.description ||
+          `Connect ${toolkit.name} through Composio.`,
+        logo: toolkit.meta.logo,
+        category: toolkit.meta.categories?.[0]?.name || "Productivity",
+        toolsCount: toolkit.meta.toolsCount ?? 0,
       };
     });
   },
 
-  async getCatalogTools(toolSlugs: string[]) {
-    if (toolSlugs.length === 0) return [];
-    const composio = getClient();
+  async listToolkitTools(toolkitSlug: string) {
     return withTimeout(async (signal) => {
-      const tools = await composio.tools.getRawComposioTools(
-        { tools: toolSlugs },
+      const tools = await getClient().tools.getRawComposioTools(
+        { toolkits: [toolkitSlug], important: false, limit: 1000 },
         undefined,
         { signal },
       );
@@ -273,27 +158,31 @@ export const composioAdapter = {
         .map((tool) => ({
           slug: tool.slug,
           name: tool.name,
-          description: tool.description,
+          description: tool.description || tool.name,
           toolkitSlug: tool.toolkit!.slug.toLowerCase(),
-          inputParameters: tool.inputParameters,
-          outputParameters: tool.outputParameters,
+          tags: tool.tags ?? [],
         }));
     });
   },
 
-  async createConnectLink(params: {
+  async createAuthorization(params: {
     composioUserId: string;
     toolkitSlug: string;
     allowedToolSlugs: string[];
     callbackUrl?: string;
-  }): Promise<{ connectedAccountId: string; redirectUrl: string }> {
-    const composio = getClient();
+  }): Promise<{
+    connectedAccountId: string;
+    redirectUrl: string;
+    sessionId: string;
+  }> {
     return withTimeout(async (signal) => {
-      const session = await composio.sessions.create(
+      const session = await getClient().sessions.create(
         params.composioUserId,
         {
-          toolkits: [params.toolkitSlug],
-          tools: { [params.toolkitSlug]: { enable: params.allowedToolSlugs } },
+          toolkits: { enable: [params.toolkitSlug] },
+          tools: {
+            [params.toolkitSlug]: { enable: params.allowedToolSlugs },
+          },
           manageConnections: false,
           sandbox: { enable: false },
         },
@@ -302,11 +191,13 @@ export const composioAdapter = {
       const request = await session.authorize(params.toolkitSlug, {
         callbackUrl: params.callbackUrl,
       });
-      if (!request.redirectUrl)
+      if (!request.redirectUrl) {
         throw new Error("Composio did not return an authorization URL");
+      }
       return {
         connectedAccountId: request.id,
         redirectUrl: request.redirectUrl,
+        sessionId: session.sessionId,
       };
     });
   },
@@ -316,9 +207,8 @@ export const composioAdapter = {
     toolkitSlug: string;
     connectedAccountId: string;
   }) {
-    const composio = getClient();
     return withTimeout(async (signal) => {
-      const response = await composio.connectedAccounts.list(
+      const response = await getClient().connectedAccounts.list(
         {
           userIds: [params.composioUserId],
           toolkitSlugs: [params.toolkitSlug],
@@ -341,69 +231,67 @@ export const composioAdapter = {
     );
   },
 
-  /**
-   * Resolve the exact tools exposed by a tenant-scoped Composio session.
-   * session.tools() is intentionally the source of truth so the AI receives
-   * Composio's current names, descriptions, and JSON input schemas.
-   */
-  async sessionTools(params: {
-    composioUserId: string;
-    toolkitSlug: string;
-    connectedAccountId: string;
-    allowedToolSlugs: string[];
-  }): Promise<
-    Array<{
-      slug: string;
-      name?: string;
-      description?: string;
-      inputParameters?: Record<string, unknown>;
-    }>
-  > {
+  async createAgentSession(
+    composioUserId: string,
+    policy: SessionPolicyConfig,
+  ): Promise<{ sessionId: string; tools: NativeSessionTool[] }> {
     return withTimeout(async (signal) => {
-      const session = await getScopedSession(params, signal);
-      const tools = (await session.tools(undefined, { signal })) as Array<any>;
-      return tools
-        .filter((tool) => typeof tool?.slug === "string")
-        .map((tool) => ({
-          slug: tool.slug,
-          name: tool.name,
-          description: tool.description,
-          inputParameters: tool.inputParameters,
-        }));
+      const session = await getClient().sessions.create(
+        composioUserId,
+        {
+          toolkits: { enable: policy.toolkitSlugs },
+          tools: policy.tools,
+          connectedAccounts: policy.connectedAccounts,
+          manageConnections: false,
+          sandbox: { enable: false },
+        },
+        { signal },
+      );
+      return {
+        sessionId: session.sessionId,
+        tools: nativeTools(await session.tools()),
+      };
     });
   },
 
-  async execute(params: {
-    composioUserId: string;
-    toolkitSlug: string;
-    connectedAccountId: string;
-    toolSlug: string;
-    arguments: Record<string, unknown>;
-  }): Promise<unknown> {
+  async sessionTools(sessionId: string): Promise<NativeSessionTool[]> {
     return withTimeout(async (signal) => {
-      const session = await getScopedSession(
-        {
-          composioUserId: params.composioUserId,
-          toolkitSlug: params.toolkitSlug,
-          connectedAccountId: params.connectedAccountId,
-          allowedToolSlugs: [params.toolSlug],
-        },
+      const session = await getClient().sessions.use(sessionId, undefined, {
         signal,
-      );
-      const result = await session.execute(
-        params.toolSlug,
-        params.arguments,
-        undefined,
-        { signal },
-      );
-      if (result.error) {
-        throw new Error(result.error);
-      }
-      return boundedResult({
-        status: "success",
-        data: result.data,
-        logId: result.logId,
       });
+      return nativeTools(await session.tools());
     });
   },
+
+  async executeMeta(
+    sessionId: string,
+    metaToolSlug: string,
+    args: Record<string, unknown>,
+    continuation?: {
+      inputResponses: Record<string, unknown>;
+      requestState?: string;
+    },
+  ) {
+    return withTimeout(async (signal) => {
+      const session = await getClient().sessions.use(sessionId, undefined, {
+        signal,
+      });
+      return session.executeMeta(
+        metaToolSlug as ToolRouterSessionMetaToolSlug,
+        args,
+        continuation,
+        { signal },
+      );
+    });
+  },
+
+  async deleteSession(sessionId: string): Promise<void> {
+    await withTimeout((signal) =>
+      getClient()
+        .sessions.delete(sessionId, { signal })
+        .then(() => undefined),
+    );
+  },
 };
+
+export { ComposioToolInputRequiredError };

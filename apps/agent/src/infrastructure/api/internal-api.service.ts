@@ -23,25 +23,28 @@ export interface IngestionStatusUpdate {
 }
 
 export const InternalApiService = {
-  async getComposioTools(
+  async openComposioSession(
     organizationId: string,
-    query: string,
+    conversationId: string,
     channel: "widget" | "email" | "whatsapp" | "telegram" = "widget",
   ): Promise<any> {
-    const { data } = await internalApi.get("/integrations/ai/tools", {
-      params: { organizationId, query, channel },
+    const { data } = await internalApi.post("/integrations/ai/session", {
+      organizationId,
+      conversationId,
+      channel,
     });
     return data?.data;
   },
 
-  async executeComposioTool(payload: {
+  async executeComposioSessionTool(payload: {
     organizationId: string;
-    connectionId: string;
-    toolSlug: string;
+    conversationId: string;
+    sessionId: string;
+    toolName: string;
     arguments: Record<string, unknown>;
   }): Promise<any> {
     const { data } = await internalApi.post(
-      "/integrations/ai/tools/execute",
+      "/integrations/ai/session/execute",
       payload,
     );
     return data?.data ?? data;

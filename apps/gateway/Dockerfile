@@ -1,5 +1,5 @@
 # Multi-stage build for smaller image size
-FROM node:20-alpine AS builder
+FROM node:22-alpine AS builder
 
 RUN npm install -g pnpm@9.15.0
 
@@ -18,7 +18,7 @@ COPY . .
 RUN pnpm run build
 
 # Production stage
-FROM node:20-alpine
+FROM node:22-alpine
 
 RUN npm install -g pnpm@9.15.0
 
