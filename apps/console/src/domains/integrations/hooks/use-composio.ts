@@ -4,8 +4,12 @@ import { composioApi } from "../api/composio.api";
 const keys = {
   all: ["composio-integrations"] as const,
   catalogRoot: ["composio-integrations", "catalog"] as const,
-  catalog: (input: { page: number; limit: number; search?: string }) =>
-    ["composio-integrations", "catalog", input] as const,
+  catalog: (input: {
+    page: number;
+    limit: number;
+    search?: string;
+    category?: string;
+  }) => ["composio-integrations", "catalog", input] as const,
   toolkit: (slug: string) =>
     ["composio-integrations", "toolkit", slug] as const,
   connections: ["composio-integrations", "connections"] as const,
@@ -15,6 +19,7 @@ export function useComposioCatalog(input: {
   page: number;
   limit: number;
   search?: string;
+  category?: string;
 }) {
   return useQuery({
     queryKey: keys.catalog(input),

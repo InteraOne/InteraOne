@@ -61,12 +61,20 @@ export interface IntegrationConnection {
 }
 
 export const composioApi = {
-  catalog: (input: { page: number; limit: number; search?: string }) => {
+  catalog: (input: {
+    page: number;
+    limit: number;
+    search?: string;
+    category?: string;
+  }) => {
     const query = new URLSearchParams({
       page: String(input.page),
       limit: String(input.limit),
     });
     if (input.search?.trim()) query.set("search", input.search.trim());
+    if (input.category?.trim() && input.category !== "All apps") {
+      query.set("category", input.category.trim());
+    }
     return apiClient.get<IntegrationCatalogResponse>(
       `/integrations/catalog?${query.toString()}`,
     );

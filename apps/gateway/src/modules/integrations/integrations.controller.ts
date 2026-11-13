@@ -53,6 +53,7 @@ export const IntegrationsController = {
           ),
         ),
         search: param(req.query.search as string | string[]),
+        category: param(req.query.category as string | string[]),
       }),
     ),
   ),
