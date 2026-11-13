@@ -56,7 +56,7 @@
 <hr/>
 
 <p align="center">
-  <img width="1536" height="1024" alt="InteraOne architecture overview" src="https://github.com/user-attachments/assets/fd53d983-e9f6-4677-83f6-83df4a3b5f5f" />
+  <img width="1348" height="1006" alt="interaone-integrations" src="https://github.com/user-attachments/assets/ab943d1c-507c-42ed-a4ee-b42261b1a80c" />
 </p>
 
 ## 🚀 Quick One-Click Dev Setup
