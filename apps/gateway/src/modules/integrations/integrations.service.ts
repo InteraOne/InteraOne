@@ -792,20 +792,38 @@ export class IntegrationsService {
 
   async catalog(
     organizationId: string,
-    input: { page: number; limit: number; search?: string },
+    input: { page: number; limit: number; search?: string; category?: string },
   ) {
     const directory = composioAdapter.isAvailable()
       ? await composioAdapter.listToolkits()
       : [];
     const search = input.search?.trim().toLowerCase();
-    const filtered = search
-      ? directory.filter((toolkit) =>
-          `${toolkit.name} ${toolkit.description} ${toolkit.category}`
-            .toLowerCase()
-            .includes(search),
-        )
-      : directory;
-    const start = (input.page - 1) * input.limit;
+    const category = input.category?.trim().toLowerCase();
+    const categoryTerms: Record<string, string[]> = {
+      communication: ["communication", "email", "messaging", "calendar"],
+      productivity: ["productivity", "collaboration", "office"],
+      "crm & sales": ["crm", "sales", "marketing"],
+      "project management": ["project", "task management"],
+      engineering: ["engineering", "developer", "development"],
+      "customer support": ["customer support", "support", "helpdesk"],
+      knowledge: ["knowledge", "documentation", "documents"],
+    };
+    const requestedCategories = category
+      ? categoryTerms[category] || [category]
+      : [];
+    const filtered = directory.filter((toolkit) => {
+      const searchable =
+        `${toolkit.name} ${toolkit.description} ${toolkit.category}`.toLowerCase();
+      const matchesSearch = !search || searchable.includes(search);
+      const toolkitCategory = toolkit.category.toLowerCase();
+      const matchesCategory =
+        requestedCategories.length === 0 ||
+        requestedCategories.some((term) => toolkitCategory.includes(term));
+      return matchesSearch && matchesCategory;
+    });
+    const totalPages = Math.max(1, Math.ceil(filtered.length / input.limit));
+    const resolvedPage = Math.min(input.page, totalPages);
+    const start = (resolvedPage - 1) * input.limit;
     const policies = await IntegrationPolicy.find({ organizationId }).lean();
     const byToolkit = new Map(
       policies.map((policy) => [policy.toolkitSlug, policy]),
@@ -821,10 +839,10 @@ export class IntegrationsService {
         },
       })),
       pagination: {
-        page: input.page,
+        page: resolvedPage,
         limit: input.limit,
         total: filtered.length,
-        totalPages: Math.max(1, Math.ceil(filtered.length / input.limit)),
+        totalPages,
       },
     };
   }

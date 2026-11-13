@@ -94,16 +94,32 @@ make all
 | `apps/worker`   | Background jobs, queues, async processing         |
 | `apps/launcher` | Embeddable widget for websites and products       |
 
-### Optional Composio integrations
+### Composio integrations (optional)
 
-Workspace admins can connect any supported Composio toolkit and choose its exact permitted actions. The feature is disabled by default and the SDK runs only in `apps/gateway`; provider tokens and the Composio API key never enter the browser or AI worker.
+[Composio](https://composio.dev) support lets workspace administrators connect external apps and control which actions agents can use. It is disabled by default.
 
-1. Create a Composio project and enable the managed auth configurations you need.
-2. Allow your console URL (for example `https://app.example.com/dashboard/integrations`) as the Connect Link redirect.
-3. Set `COMPOSIO_ENABLED=true`, `COMPOSIO_API_KEY`, and `COMPOSIO_REDIRECT_URL` for the gateway. Set `COMPOSIO_ENVIRONMENT` to a stable deployment name so scoped user identities remain stable.
-4. Restart the gateway, open **Integrations → AI tool connections**, select permitted actions, and connect the application.
+#### Configuration
 
-Each AI conversation receives a tenant-scoped Composio Session containing only native meta-tools. The model discovers schemas and dependencies at runtime, while the gateway pins organization-owned accounts and enforces the current per-tool policy on every call. Read actions default on for a new toolkit; writes require explicit admin enablement, and destructive actions additionally pause for user approval. Session execution is bounded and audited, and successful mutations are durably deduplicated.
+Add the following variables to the gateway environment:
+
+| Variable | Description |
+| --- | --- |
+| `COMPOSIO_ENABLED` | Set to `true` to enable Composio integrations. |
+| `COMPOSIO_API_KEY` | API key for your Composio project. |
+| `COMPOSIO_REDIRECT_URL` | Console URL used after authorization, such as `https://app.example.com/dashboard/integrations`. |
+| `COMPOSIO_ENVIRONMENT` | Stable name for the deployment, such as `production` or `staging`. |
+
+#### Setup
+
+1. Create a project in Composio.
+2. Enable the managed authentication configurations for the apps you want to support.
+3. Add `COMPOSIO_REDIRECT_URL` to the allowed Connect Link redirects in Composio.
+4. Configure the gateway environment variables and restart `apps/gateway`.
+5. Open **Integrations** in the InteraOne console, select an app, configure its allowed actions, and connect an account.
+
+The Composio SDK is used only by `apps/gateway`. API keys and provider credentials are not sent to the console or `apps/agent`.
+
+Integration policies are scoped to an organization and checked by the gateway on every tool call. Read actions can be enabled when a toolkit is configured; write actions must be explicitly allowed. Destructive actions require user approval. Executions are rate-limited, audited, and deduplicated where applicable.
 
 <hr/>
 

@@ -1,6 +1,9 @@
 import { useMemo, useState } from "react";
 import {
+  AppWindow,
   CheckCircle2,
+  ChevronRight,
+  Layers3,
   Loader2,
   Pause,
   Play,
@@ -40,6 +43,7 @@ import {
 } from "@/domains/channels/hooks/use-channels";
 import type { LeadSourceConnection } from "@/domains/channels/types/types";
 import { ComposioIntegrations } from "../components/composio-integrations";
+import { useComposioConnections } from "../hooks/use-composio";
 
 type Provider =
   | "facebook_lead_ads"
@@ -85,6 +89,17 @@ const providers = [
     icon: GoogleTasksLogo,
   },
 ];
+
+const marketplaceCategories = [
+  "All apps",
+  "Communication",
+  "Productivity",
+  "CRM & sales",
+  "Project management",
+  "Engineering",
+  "Customer support",
+  "Knowledge",
+] as const;
 
 function ResultBanner({ success, text }: { success: boolean; text: string }) {
   const Icon = success ? CheckCircle2 : XCircle;
@@ -325,8 +340,10 @@ export function IntegrationsPage() {
   const syncTaskLists = useSyncGoogleTaskLists();
   const updateForm = useUpdateLeadSourceForm();
   const deleteSource = useDeleteLeadSource();
+  const composioConnections = useComposioConnections();
   const [query, setQuery] = useState("");
-  const [view, setView] = useState<"all" | "data" | "ai">("all");
+  const [view, setView] = useState<"marketplace" | "connected">("marketplace");
+  const [category, setCategory] = useState("All apps");
   const [sourceToDelete, setSourceToDelete] =
     useState<LeadSourceConnection | null>(null);
   const [activeProvider, setActiveProvider] = useState<Provider | null>(null);
@@ -349,6 +366,13 @@ export function IntegrationsPage() {
   }, [query]);
   const connectedCount = new Set(leadSources.map((source) => source.provider))
     .size;
+  const connectedProviders = providers.filter((provider) =>
+    leadSources.some((source) => source.provider === provider.id),
+  );
+  const composioConnectedCount = (composioConnections.data || []).filter(
+    (connection) => connection.status !== "disconnected",
+  ).length;
+  const totalConnected = connectedCount + composioConnectedCount;
 
   const connect = (provider: Provider) => {
     if (provider === "facebook_lead_ads") return connectFacebook.mutate();
@@ -382,59 +406,51 @@ export function IntegrationsPage() {
         ? "task lists"
         : "forms";
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
+    <div className="mx-auto max-w-7xl space-y-6">
       <section className="space-y-5" data-tour-id="page-integrations-heading">
-        <header className="space-y-5 border-b border-border/70 pb-5">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <header className="border-b border-border/70 pb-5">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                Workspace settings
+                Workspace · Integrations
               </p>
               <h1 className="text-2xl font-semibold tracking-[-0.025em]">
                 Integrations
               </h1>
               <p className="mt-1.5 max-w-2xl text-sm leading-6 text-muted-foreground">
-                Connect external services and decide which actions your agents
-                can use.
+                Connect your workspace, manage accounts, and control the tools
+                available to your agents.
               </p>
             </div>
-            <p className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
-              <span className="h-2 w-2 rounded-full bg-emerald-500" />
-              <span>
-                <strong className="font-semibold text-foreground">
-                  {connectedCount}
-                </strong>{" "}
-                native provider{connectedCount === 1 ? "" : "s"} connected
+            <div className="flex items-center gap-3 rounded-lg border border-border/70 bg-card px-3 py-2 shadow-xs">
+              <span className="flex h-7 w-7 items-center justify-center rounded-md bg-emerald-500/10 text-emerald-400">
+                <AppWindow className="h-3.5 w-3.5" />
               </span>
-            </p>
+              <div>
+                <p className="text-sm font-semibold leading-none">
+                  {totalConnected}
+                </p>
+                <p className="mt-1 text-[10px] text-muted-foreground">
+                  Connected apps
+                </p>
+              </div>
+            </div>
           </div>
-
-          <label className="relative block max-w-2xl">
-            <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search integrations by name or capability"
-              className="h-11 w-full rounded-lg border border-border bg-background pl-10 pr-4 text-sm shadow-xs outline-none transition placeholder:text-muted-foreground/70 focus:border-primary/50 focus:ring-2 focus:ring-primary/10"
-            />
-          </label>
-
           <nav
-            className="flex items-center gap-6 overflow-x-auto"
-            aria-label="Integration categories"
+            className="mt-5 flex items-center gap-6 overflow-x-auto"
+            aria-label="Integration views"
           >
             {(
               [
-                { id: "all", label: "All integrations" },
-                { id: "data", label: "Native connections" },
-                { id: "ai", label: "Agent tools" },
+                { id: "marketplace", label: "Marketplace" },
+                { id: "connected", label: `Connected (${totalConnected})` },
               ] as const
             ).map((item) => (
               <button
                 key={item.id}
                 type="button"
                 onClick={() => setView(item.id)}
-                className={`relative whitespace-nowrap pb-2 text-sm font-medium transition-colors after:absolute after:inset-x-0 after:-bottom-px after:h-0.5 after:rounded-full ${view === item.id ? "text-foreground after:bg-primary" : "text-muted-foreground after:bg-transparent hover:text-foreground"}`}
+                className={`relative whitespace-nowrap pb-3 text-sm font-medium transition-colors after:absolute after:inset-x-0 after:-bottom-px after:h-0.5 ${view === item.id ? "text-foreground after:bg-primary" : "text-muted-foreground after:bg-transparent hover:text-foreground"}`}
               >
                 {item.label}
               </button>
@@ -485,79 +501,143 @@ export function IntegrationsPage() {
           />
         )}
 
-        {view !== "ai" && (shownProviders.length > 0 || view === "data") && (
-          <div className="space-y-4 pt-2">
-            <div className="flex items-end justify-between gap-4">
-              <div>
-                <h2 className="font-semibold tracking-tight">
-                  Native connections
-                </h2>
-                <p className="mt-0.5 text-sm text-muted-foreground">
-                  Direct provider connections managed by InteraOne for syncing
-                  leads, calendars, and tasks.
-                </p>
-              </div>
-              <span className="hidden text-xs text-muted-foreground sm:inline">
-                {shownProviders.length} provider
-                {shownProviders.length === 1 ? "" : "s"}
-              </span>
+        {view === "connected" && (
+          <div className="space-y-4 pt-1">
+            <div>
+              <h2 className="text-sm font-semibold">Connected apps</h2>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Active workspace accounts appear first for faster access.
+              </p>
             </div>
-            {shownProviders.length ? (
-              <div className="grid gap-3 sm:grid-cols-2">
-                {shownProviders.map((provider) => {
+            {connectedProviders.length > 0 && (
+              <div className="overflow-hidden rounded-xl border border-border/70 bg-card">
+                {connectedProviders.map((provider, index) => {
                   const sources = leadSources.filter(
                     (source) => source.provider === provider.id,
                   );
-                  const connected = sources.length > 0;
-                  const pending = isConnecting(provider.id);
-                  const error = connectionError(provider.id);
                   const Icon = provider.icon;
                   return (
-                    <article
+                    <button
                       key={provider.id}
-                      data-tour-id={`page-integrations-${
-                        provider.id === "facebook_lead_ads"
-                          ? "facebook"
-                          : "google-forms"
-                      }`}
-                      className={`group overflow-hidden rounded-lg border bg-card transition-colors hover:bg-muted/[0.16] ${connected ? "border-emerald-500/30" : "border-border/70 hover:border-primary/30"}`}
+                      type="button"
+                      onClick={() => setActiveProvider(provider.id)}
+                      className={`flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-muted/35 ${index ? "border-t border-border/60" : ""}`}
                     >
-                      <div className="p-4">
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-border/60 bg-background p-2 shadow-xs">
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border/70 bg-background p-1.5">
+                        <Icon className="h-full w-full" />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-semibold">
+                          {provider.name}
+                        </span>
+                        <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
+                          {sources.length} account
+                          {sources.length === 1 ? "" : "s"} · {provider.brand}
+                        </span>
+                      </span>
+                      <span className="hidden items-center gap-1.5 text-[11px] font-medium text-emerald-400 sm:flex">
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                        Connected
+                      </span>
+                      <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            <ComposioIntegrations
+              key={`connected-${category}`}
+              query={query}
+              category={category}
+              connectedOnly
+            />
+          </div>
+        )}
+      </section>
+
+      {view === "marketplace" && (
+        <section className="space-y-4">
+          <div className="sticky top-0 z-10 -mx-1 flex flex-col gap-3 border-b border-border/70 bg-background/95 px-1 pb-4 pt-1 backdrop-blur sm:flex-row sm:items-center">
+            <label className="relative min-w-0 flex-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search apps, tools, or capabilities…"
+                className="h-10 w-full rounded-lg border border-border/70 bg-card pl-9 pr-3 text-sm shadow-xs outline-none transition placeholder:text-muted-foreground/65 focus:border-primary/60 focus:ring-2 focus:ring-primary/10"
+              />
+            </label>
+            <div
+              className="flex items-center gap-2 overflow-x-auto"
+              aria-label="Integration categories"
+            >
+              {marketplaceCategories.map((item) => (
+                <button
+                  key={item}
+                  type="button"
+                  onClick={() => setCategory(item)}
+                  className={`h-8 shrink-0 rounded-lg border px-3 text-xs font-medium transition ${category === item ? "border-primary/40 bg-primary/10 text-foreground" : "border-border/70 bg-card text-muted-foreground hover:bg-muted hover:text-foreground"}`}
+                >
+                  {item}
+                </button>
+              ))}
+            </div>
+          </div>
+          {(category === "All apps" ||
+            category === "Productivity" ||
+            category === "CRM & sales") &&
+            shownProviders.length > 0 && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Layers3 className="h-4 w-4 text-muted-foreground" />
+                    <h2 className="text-sm font-semibold">
+                      Built for InteraOne
+                    </h2>
+                  </div>
+                  <span className="text-[11px] text-muted-foreground">
+                    Direct connections
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 gap-px overflow-hidden rounded-xl border border-border/70 bg-border/70 sm:grid-cols-2 lg:grid-cols-4">
+                  {shownProviders.map((provider) => {
+                    const sources = leadSources.filter(
+                      (source) => source.provider === provider.id,
+                    );
+                    const connected = sources.length > 0;
+                    const pending = isConnecting(provider.id);
+                    const error = connectionError(provider.id);
+                    const Icon = provider.icon;
+                    return (
+                      <article
+                        key={provider.id}
+                        className="group flex min-h-36 flex-col bg-card p-4 transition-colors hover:bg-muted/40"
+                      >
+                        <div className="flex items-start justify-between">
+                          <span className="flex h-9 w-9 items-center justify-center rounded-lg border border-border/70 bg-background p-1.5">
                             <Icon className="h-full w-full" />
-                          </div>
-                          <div
-                            className={`flex items-center gap-1.5 rounded-full px-2 py-1 text-[10px] font-semibold ${connected ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "bg-muted text-muted-foreground"}`}
-                          >
-                            <span
-                              className={`h-1.5 w-1.5 rounded-full ${connected ? "bg-emerald-500" : "bg-muted-foreground/35"}`}
-                            />
-                            <span>
-                              {connected ? "Connected" : "Not connected"}
+                          </span>
+                          {connected && (
+                            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2 py-1 text-[10px] font-semibold text-emerald-400">
+                              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                              Connected
                             </span>
-                          </div>
+                          )}
                         </div>
-                        <div className="mt-3.5">
-                          <p className="text-[11px] font-medium text-muted-foreground">
-                            {provider.brand}
-                          </p>
-                          <h3 className="mt-0.5 text-sm font-semibold tracking-tight">
-                            {provider.name}
-                          </h3>
-                          <p className="mt-1.5 line-clamp-2 min-h-10 text-xs leading-5 text-muted-foreground">
-                            {provider.description}
-                          </p>
-                        </div>
-                        <div className="mt-4 flex items-center justify-between gap-3 border-t border-border/60 pt-3">
+                        <h3 className="mt-3 truncate text-sm font-semibold">
+                          {provider.name}
+                        </h3>
+                        <p className="mt-0.5 text-[11px] text-muted-foreground">
+                          {provider.brand}
+                        </p>
+                        <div className="mt-auto flex items-end justify-between gap-2 pt-3">
                           <span className="truncate text-[11px] text-muted-foreground">
-                            {sources.length
+                            {connected
                               ? `${sources.length} account${sources.length === 1 ? "" : "s"}`
                               : provider.benefit}
                           </span>
                           <Button
-                            size="sm"
-                            className="min-w-20 gap-1.5"
+                            size="xs"
                             variant={connected ? "outline" : "default"}
                             disabled={pending}
                             onClick={() =>
@@ -567,39 +647,41 @@ export function IntegrationsPage() {
                             }
                           >
                             {pending ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
+                              <Loader2 className="animate-spin" />
                             ) : (
-                              <Settings2 className="h-3.5 w-3.5" />
+                              <Settings2 />
                             )}
                             {connected ? "Manage" : "Connect"}
                           </Button>
                         </div>
                         {error && (
-                          <p className="mt-3 text-xs font-medium text-destructive">
+                          <p className="mt-2 text-[11px] text-destructive">
                             {error instanceof Error
                               ? error.message
-                              : `Could not connect ${provider.name}`}
+                              : "Connection failed"}
                           </p>
                         )}
-                      </div>
-                    </article>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="rounded-2xl border border-dashed bg-muted/20 px-6 py-12 text-center">
-                <Search className="mx-auto h-6 w-6 text-muted-foreground" />
-                <p className="mt-3 font-medium">No integrations found</p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Try a different app or provider name.
-                </p>
+                      </article>
+                    );
+                  })}
+                </div>
               </div>
             )}
+          <div className="flex items-center justify-between pt-2">
+            <div>
+              <h2 className="text-sm font-semibold">App catalog</h2>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Connect apps and choose exactly which tools agents may use.
+              </p>
+            </div>
           </div>
-        )}
-      </section>
-
-      {view !== "data" && <ComposioIntegrations query={query} />}
+          <ComposioIntegrations
+            key={`marketplace-${category}`}
+            query={query}
+            category={category}
+          />
+        </section>
+      )}
 
       <Dialog
         open={Boolean(activeProvider)}
