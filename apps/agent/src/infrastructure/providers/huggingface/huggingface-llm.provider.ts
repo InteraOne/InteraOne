@@ -14,15 +14,28 @@ import { estimateCost } from "../observability/cost-tracker";
 import { LatencyTracker } from "../observability/latency-tracker";
 import { TokenTracker } from "../observability/token-tracker";
 import {
-  cleanFinalResponse,
+  cleanAssistantResponse,
   TOOL_LIMIT_FINAL_RESPONSE_INSTRUCTION,
 } from "../utils/tool-limit";
 import { buildToolInputSchema } from "../utils/tool-schema";
+import {
+  executeToolBatch,
+  MAX_TOOL_LOOPS,
+  toolOutcomeContent,
+} from "../../../modules/agents/tool-loop";
 
 export class HuggingFaceLLMProvider implements LLMProvider {
   readonly name = "huggingface";
   private client: InferenceClient;
   private defaultModel: string;
+  private readonly callTimeoutMs = Math.max(
+    1_000,
+    Number(process.env.HF_MAX_TIMEOUT_MS || 60_000),
+  );
+  private readonly workflowTimeoutMs = Math.max(
+    this.callTimeoutMs,
+    Number(process.env.HF_WORKFLOW_TIMEOUT_MS || 180_000),
+  );
 
   constructor() {
     const hfConfig = config.llm.huggingface;
@@ -41,23 +54,14 @@ export class HuggingFaceLLMProvider implements LLMProvider {
     latencyTracker.start();
     const tokenTracker = new TokenTracker();
     const model = options.model ?? this.defaultModel;
-    const maxTimeoutMs = parseInt(process.env.HF_MAX_TIMEOUT_MS || "60000", 10);
 
     try {
-      const result = await Promise.race([
-        this.executeGenerate(messages, options, tokenTracker),
-        new Promise<LLMGenerateResult>((_, reject) =>
-          setTimeout(
-            () =>
-              reject(
-                new Error(
-                  `Hugging Face generation timed out after ${maxTimeoutMs}ms`,
-                ),
-              ),
-            maxTimeoutMs,
-          ),
-        ),
-      ]);
+      const result = await this.executeGenerate(
+        messages,
+        options,
+        tokenTracker,
+        Date.now() + this.workflowTimeoutMs,
+      );
 
       const totalUsage = tokenTracker.toUsage();
       const latencyMs = latencyTracker.stopMs();
@@ -107,6 +111,7 @@ export class HuggingFaceLLMProvider implements LLMProvider {
     messages: LLMMessage[],
     options: LLMOptions,
     tokenTracker: TokenTracker,
+    workflowDeadline: number,
   ): Promise<LLMGenerateResult> {
     const {
       model = this.defaultModel,
@@ -115,22 +120,6 @@ export class HuggingFaceLLMProvider implements LLMProvider {
       onStream,
       onToolEvent,
     } = options;
-
-    const toolLabels: Record<string, string> = {
-      faq_retrieval: "Searching FAQs",
-      knowledge_retrieval: "Searching uploaded knowledge",
-      web_crawl: "Searching web",
-      conversation_memory: "Checking conversation history",
-      seek_contact: "Looking up contact",
-      create_ticket: "Creating ticket",
-      update_ticket: "Updating ticket",
-      close_ticket: "Closing ticket",
-      send_email: "Sending email",
-      escalate_to_human: "Connecting to human agent",
-      verify_email_otp: "Verifying code",
-      update_contact_profile: "Saving contact details",
-      mark_query_resolved: "Marking query resolved",
-    };
 
     const hfTools =
       tools.length > 0
@@ -149,7 +138,6 @@ export class HuggingFaceLLMProvider implements LLMProvider {
       content: m.content,
     }));
 
-    const MAX_TOOL_LOOPS = 5;
     const steps: LLMGenerateStep[] = [];
     let loop = 0;
     let responseText = "";
@@ -177,7 +165,9 @@ export class HuggingFaceLLMProvider implements LLMProvider {
       }> = [];
 
       if (onStream) {
-        const stream = this.client.chatCompletionStream(payload);
+        const stream = this.client.chatCompletionStream(payload, {
+          signal: this.requestSignal(workflowDeadline),
+        });
 
         for await (const chunk of stream) {
           if (chunk.choices && chunk.choices.length > 0) {
@@ -191,7 +181,7 @@ export class HuggingFaceLLMProvider implements LLMProvider {
                 .replace(/<\/?(?:thinking|thought)>/gi, "");
 
               // Preserve standalone spaces/newlines emitted as their own delta.
-              if (cleanText.length > 0) {
+              if (tools.length === 0 && cleanText.length > 0) {
                 onStream(cleanText, false);
               }
             }
@@ -244,7 +234,9 @@ export class HuggingFaceLLMProvider implements LLMProvider {
           });
         }
       } else {
-        const result = await this.client.chatCompletion(payload);
+        const result = await this.client.chatCompletion(payload, {
+          signal: this.requestSignal(workflowDeadline),
+        });
         responseText = result.choices[0]?.message?.content || "";
 
         if (result.choices[0]?.message?.tool_calls) {
@@ -283,66 +275,13 @@ export class HuggingFaceLLMProvider implements LLMProvider {
       toolCalls = toolCalls.filter(Boolean);
 
       if (toolCalls.length === 0) {
-        // Fallback: Parse XML/custom tags generated directly in responseText by models that don't use structured tool calls natively
-        // Patterns:
-        // 1. <tool_call>{"name": "tool_name", "arguments": {...}}</tool_call>
-        // 2. <toolname>{"arg": "val"}</toolname>
-        const toolCallRegex =
-          /<tool_call>\s*([\s\S]*?)\s*(?:<\/tool_call>|$)/gi;
-        let match;
-        while ((match = toolCallRegex.exec(responseText)) !== null) {
-          try {
-            const parsed = JSON.parse(match[1].trim());
-            const name = parsed.name || parsed.call;
-            const args = parsed.arguments || parsed.parameters || parsed;
-            if (name) {
-              toolCalls.push({
-                id: `call_${Date.now()}_${toolCalls.length}`,
-                function: {
-                  name,
-                  arguments:
-                    typeof args === "string" ? args : JSON.stringify(args),
-                },
-              });
-            }
-          } catch {}
+        const cleanText = cleanAssistantResponse(
+          responseText,
+          tools.map((tool) => tool.name),
+        );
+        if (onStream && tools.length > 0 && cleanText) {
+          onStream(cleanText, false);
         }
-
-        // If no tool_call tags, let's search for tags matching registered tool names
-        if (toolCalls.length === 0) {
-          for (const t of tools) {
-            // Check both standard name and name without underscores (e.g. faq_retrieval and faqretrieval)
-            const cleanNames = [t.name, t.name.replace(/_/g, "")];
-            for (const name of cleanNames) {
-              const customTagRegex = new RegExp(
-                `<${name}>\\s*([\\s\\S]*?)\\s*(?:</${name}>|$)`,
-                "gi",
-              );
-              let customMatch;
-              while (
-                (customMatch = customTagRegex.exec(responseText)) !== null
-              ) {
-                try {
-                  const argsText = customMatch[1].trim();
-                  JSON.parse(argsText); // Ensure it's valid JSON
-                  toolCalls.push({
-                    id: `call_${Date.now()}_${toolCalls.length}`,
-                    function: { name: t.name, arguments: argsText },
-                  });
-                } catch {}
-              }
-            }
-          }
-        }
-      }
-
-      if (toolCalls.length === 0) {
-        const cleanText = responseText
-          .replace(/<thinking>[\s\S]*?<\/thinking>/gi, "")
-          .replace(/<thought>[\s\S]*?<\/thought>/gi, "")
-          .replace(/<(thinking|thought)>[\s\S]*$/gi, "")
-          .replace(/<\/?(?:thinking|thought)>/gi, "")
-          .trim();
 
         return {
           text: cleanText || "Sorry, I could not generate a response.",
@@ -365,150 +304,25 @@ export class HuggingFaceLLMProvider implements LLMProvider {
         })),
       });
 
-      const executeSingleToolCall = async (
-        call: (typeof toolCalls)[number],
-      ) => {
-        const tool = tools.find((t) => t.name === call.function.name);
-        if (!tool) return;
-
-        const toolMeta = toolLabels[call.function.name] || "Working on it";
-
-        if (onToolEvent) {
-          onToolEvent({
-            type: "start",
-            toolName: call.function.name,
-            label: toolMeta,
-          });
-        }
-
-        let result: unknown;
-        let stepError: string | undefined;
-        const stepTimestamp = new Date();
-
-        let parsedInput: Record<string, unknown> = {};
-        let inputParseError: string | undefined;
-        try {
-          parsedInput = JSON.parse(call.function.arguments);
-          if (
-            !parsedInput ||
-            typeof parsedInput !== "object" ||
-            Array.isArray(parsedInput)
-          ) {
-            inputParseError = "Tool arguments must be a JSON object";
-            parsedInput = {};
-          }
-        } catch {
-          inputParseError = "The model produced invalid JSON tool arguments";
-        }
-
-        const sanitizedInput = {
-          ...parsedInput,
-          ...(toolContext?.conversationId
-            ? { conversationId: toolContext.conversationId }
-            : {}),
-          ...(toolContext?.organizationId
-            ? { organizationId: toolContext.organizationId }
-            : {}),
-        };
-
-        try {
-          if (inputParseError) throw new Error(inputParseError);
-          result = await tool.execute(sanitizedInput, toolContext);
-
-          hfMessages.push({
-            role: "tool",
-            tool_call_id: call.id,
-            name: call.function.name,
-            content:
-              typeof result === "string" ? result : JSON.stringify(result),
-          });
-
-          if (onToolEvent) {
-            let detail: string | undefined;
-            if (
-              (call.function.name === "faq_retrieval" ||
-                call.function.name === "knowledge_retrieval") &&
-              result &&
-              typeof result === "object"
-            ) {
-              const r = result as any;
-              if (r.results && Array.isArray(r.results)) {
-                detail = `Retrieved ${r.results.length} document${r.results.length !== 1 ? "s" : ""}`;
-              }
-            } else if (
-              call.function.name === "create_ticket" &&
-              result &&
-              typeof result === "object"
-            ) {
-              const r = result as any;
-              if (r.ticketNumber) detail = `Ticket ${r.ticketNumber}`;
-            }
-
-            onToolEvent({
-              type: "complete",
-              toolName: call.function.name,
-              label: toolMeta,
-              detail,
-            });
-          }
-        } catch (e: unknown) {
-          stepError = e instanceof Error ? e.message : String(e);
-          result = { error: stepError };
-
-          hfMessages.push({
-            role: "tool",
-            tool_call_id: call.id,
-            name: call.function.name,
-            content: JSON.stringify({ error: stepError }),
-          });
-
-          if (onToolEvent) {
-            onToolEvent({
-              type: "complete",
-              toolName: call.function.name,
-              label: toolMeta,
-              detail: "Failed",
-            });
-          }
-        }
-
-        steps.push({
-          toolName: call.function.name,
-          args: sanitizedInput,
-          result,
-          error: stepError,
-          timestamp: stepTimestamp,
+      const outcomes = await executeToolBatch({
+        calls: toolCalls.map((call) => ({
+          id: call.id,
+          name: call.function.name,
+          input: call.function.arguments,
+        })),
+        tools,
+        context: toolContext,
+        onToolEvent,
+      });
+      for (const outcome of outcomes) {
+        if (!outcome.deferred) options.onToolStep?.(outcome.step);
+        hfMessages.push({
+          role: "tool",
+          tool_call_id: outcome.call.id,
+          name: outcome.call.name,
+          content: toolOutcomeContent(outcome),
         });
-      };
-
-      // Execute tools
-      const sequentialTools = [
-        "create_ticket",
-        "update_ticket",
-        "close_ticket",
-        "send_email",
-        "escalate_to_human",
-      ];
-      const isSequential = (name: string) =>
-        sequentialTools.includes(name) ||
-        tools.find((tool) => tool.name === name)?.executionMode === "sequential";
-      const parallelCalls = toolCalls.filter(
-        (c) => !isSequential(c.function.name),
-      );
-      const sequentialCalls = toolCalls.filter((c) =>
-        isSequential(c.function.name),
-      );
-
-      // 1. Run parallel read/retrieval tools concurrently
-      if (parallelCalls.length > 0) {
-        await Promise.all(
-          parallelCalls.map((call) => executeSingleToolCall(call)),
-        );
-      }
-
-      // 2. Run sequential write/mutation tools
-      for (const call of sequentialCalls) {
-        await executeSingleToolCall(call);
+        if (!outcome.deferred) steps.push(outcome.step);
       }
     }
 
@@ -533,12 +347,14 @@ export class HuggingFaceLLMProvider implements LLMProvider {
     };
 
     if (onStream) {
-      const finalStream = this.client.chatCompletionStream(finalPayload);
+      const finalStream = this.client.chatCompletionStream(finalPayload, {
+        signal: this.requestSignal(workflowDeadline),
+      });
       for await (const chunk of finalStream) {
         const content = chunk.choices?.[0]?.delta?.content;
         if (content) {
           responseText += content;
-          onStream(content, false);
+          if (tools.length === 0) onStream(content, false);
         }
         const usage = (chunk as any).usage;
         if (usage) {
@@ -550,7 +366,9 @@ export class HuggingFaceLLMProvider implements LLMProvider {
         }
       }
     } else {
-      const finalResult = await this.client.chatCompletion(finalPayload);
+      const finalResult = await this.client.chatCompletion(finalPayload, {
+        signal: this.requestSignal(workflowDeadline),
+      });
       responseText = finalResult.choices[0]?.message?.content || "";
       if (finalResult.usage) {
         tokenTracker.accumulate({
@@ -561,7 +379,13 @@ export class HuggingFaceLLMProvider implements LLMProvider {
       }
     }
 
-    const finalCleanText = cleanFinalResponse(responseText);
+    const finalCleanText = cleanAssistantResponse(
+      responseText,
+      tools.map((tool) => tool.name),
+    );
+    if (onStream && tools.length > 0 && finalCleanText) {
+      onStream(finalCleanText, false);
+    }
 
     return {
       text:
@@ -570,6 +394,16 @@ export class HuggingFaceLLMProvider implements LLMProvider {
       usage: tokenTracker.toUsage(),
       steps,
     };
+  }
+
+  private requestSignal(workflowDeadline: number): AbortSignal {
+    const remainingMs = workflowDeadline - Date.now();
+    if (remainingMs <= 0) {
+      throw new Error(
+        `Hugging Face workflow timed out after ${this.workflowTimeoutMs}ms`,
+      );
+    }
+    return AbortSignal.timeout(Math.min(this.callTimeoutMs, remainingMs));
   }
 
   async getCapabilities(modelId?: string): Promise<ModelCapabilities> {

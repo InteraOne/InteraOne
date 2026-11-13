@@ -106,3 +106,18 @@ export {
   IntegrationAuditEvent,
   IIntegrationAuditEvent,
 } from "./IntegrationAuditEvent";
+export {
+  IntegrationSession,
+  IIntegrationSession,
+  IntegrationSessionStatus,
+} from "./IntegrationSession";
+export {
+  IntegrationExecution,
+  IIntegrationExecution,
+  IntegrationExecutionStatus,
+} from "./IntegrationExecution";
+export {
+  IntegrationApproval,
+  IIntegrationApproval,
+  IntegrationApprovalStatus,
+} from "./IntegrationApproval";

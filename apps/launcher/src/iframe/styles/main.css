@@ -1615,6 +1615,11 @@ body {
   border-color: #34d399;
 }
 
+.tool-step.is-failed .tool-step-icon {
+  background: rgba(248, 113, 113, 0.15);
+  border-color: #f87171;
+}
+
 .tool-step-check {
   width: 7px;
   height: 7px;
@@ -1626,7 +1631,13 @@ body {
   display: block;
 }
 
-.tool-step.is-done .tool-step-spinner {
+.tool-step.is-failed .tool-step-check {
+  display: block;
+  color: #f87171;
+}
+
+.tool-step.is-done .tool-step-spinner,
+.tool-step.is-failed .tool-step-spinner {
   display: none;
 }
 
@@ -1646,6 +1657,11 @@ body {
 
 .tool-step.is-done .tool-step-label {
   color: color-mix(in srgb, var(--vx-text, #f4f4f5) 45%, transparent);
+  font-weight: 400;
+}
+
+.tool-step.is-failed .tool-step-label {
+  color: color-mix(in srgb, #f87171 75%, var(--vx-text, #f4f4f5));
   font-weight: 400;
 }
 

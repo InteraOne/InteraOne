@@ -1,11 +1,10 @@
 services:
-
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped
     ports:
-      - "80:80"       # HTTP → HTTPS redirect
-      - "443:443"     # HTTPS
+      - "80:80" # HTTP → HTTPS redirect
+      - "443:443" # HTTPS
       - "443:443/udp" # HTTP/3 (QUIC)
     environment:
       API_HOST: ${API_HOST:-localhost}
@@ -59,11 +58,11 @@ services:
         max-size: "5m"
         max-file: "2"
 
-  console: 
+  console:
     image: ompharate/interaone-console:latest
     restart: unless-stopped
     ports:
-      - "127.0.0.1:3000:3000"  # Caddy is the public entry-point; bind locally for health checks only
+      - "127.0.0.1:3000:3000" # Caddy is the public entry-point; bind locally for health checks only
     env_file:
       - ../apps/console/.env.docker
     environment:
@@ -76,7 +75,15 @@ services:
     networks:
       - InteraOne-network
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:3000"]
+      test:
+        [
+          "CMD",
+          "wget",
+          "--quiet",
+          "--tries=1",
+          "--spider",
+          "http://127.0.0.1:3000",
+        ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -91,7 +98,7 @@ services:
     image: ompharate/interaone-gateway:latest
     restart: unless-stopped
     ports:
-      - "127.0.0.1:3002:3002"  # Caddy is the public entry-point; bind locally for health checks only
+      - "127.0.0.1:3002:3002" # Caddy is the public entry-point; bind locally for health checks only
     env_file:
       - ../apps/gateway/.env.docker
     environment:
@@ -106,6 +113,9 @@ services:
       COMPOSIO_API_KEY: ${COMPOSIO_API_KEY:-}
       COMPOSIO_REDIRECT_URL: ${COMPOSIO_REDIRECT_URL:-}
       COMPOSIO_ENVIRONMENT: ${COMPOSIO_ENVIRONMENT:-self-host}
+      COMPOSIO_SESSION_TTL_MS: ${COMPOSIO_SESSION_TTL_MS:-900000}
+      COMPOSIO_APPROVAL_TTL_MS: ${COMPOSIO_APPROVAL_TTL_MS:-600000}
+      COMPOSIO_MAX_SESSION_EXECUTIONS: ${COMPOSIO_MAX_SESSION_EXECUTIONS:-50}
     volumes:
       - ../ee:/app/ee:ro
     depends_on:
@@ -118,7 +128,15 @@ services:
     networks:
       - InteraOne-network
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:3002/api/v1/health"]
+      test:
+        [
+          "CMD",
+          "wget",
+          "--quiet",
+          "--tries=1",
+          "--spider",
+          "http://127.0.0.1:3002/api/v1/health",
+        ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -180,7 +198,7 @@ services:
     image: mongo:7
     restart: unless-stopped
     ports:
-      - "127.0.0.1:27017:27017"  # Only accessible from localhost for security
+      - "127.0.0.1:27017:27017" # Only accessible from localhost for security
     environment:
       MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME}
       MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD}
@@ -191,7 +209,8 @@ services:
     networks:
       - InteraOne-network
     healthcheck:
-      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      test:
+        ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -206,7 +225,7 @@ services:
     image: redis:7-alpine
     restart: unless-stopped
     ports:
-      - "127.0.0.1:6379:6379"  # Only accessible from localhost
+      - "127.0.0.1:6379:6379" # Only accessible from localhost
     volumes:
       - redis_data:/data
     environment:
@@ -219,7 +238,8 @@ services:
     networks:
       - InteraOne-network
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli --no-auth-warning -a $$REDIS_PASSWORD ping"]
+      test:
+        ["CMD-SHELL", "redis-cli --no-auth-warning -a $$REDIS_PASSWORD ping"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -234,7 +254,7 @@ services:
     image: pgsty/silo:latest
     restart: unless-stopped
     ports:
-      - "127.0.0.1:9002:9002" 
+      - "127.0.0.1:9002:9002"
     environment:
       # Silo retains these MINIO_* server variables as its stable compatibility interface.
       MINIO_ROOT_USER: ${SILO_ROOT_USER}
@@ -262,8 +282,8 @@ services:
     image: qdrant/qdrant:latest
     restart: unless-stopped
     ports:
-      - "127.0.0.1:6333:6333"  # REST API
-      - "127.0.0.1:6334:6334"  # gRPC
+      - "127.0.0.1:6333:6333" # REST API
+      - "127.0.0.1:6334:6334" # gRPC
     volumes:
       - qdrant_data:/qdrant/storage
     networks:

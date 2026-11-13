@@ -1,10 +1,15 @@
 import { ProviderFactory } from "../factory/provider.factory";
 import {
   LLMGenerateResult,
+  LLMGenerateStep,
   LLMMessage,
   LLMOptions,
 } from "../types/ai.types";
-import { getLLMModelConfig, LLM_REGISTRY, hasProviderCredentials } from "../registry/model.registry";
+import {
+  getLLMModelConfig,
+  LLM_REGISTRY,
+  hasProviderCredentials,
+} from "../registry/model.registry";
 import config from "../../../config";
 import logger from "../../../shared/logger";
 import { modelHealth, ModelFailureType } from "./model-health";
@@ -16,15 +21,20 @@ export interface FallbackChainEntry {
   model?: string;
 }
 
-const ACTIVE_PROVIDER = (process.env.LLM_PROVIDER ?? "bedrock") as "bedrock" | "ollama" | "huggingface" | "openai";
+const ACTIVE_PROVIDER = (process.env.LLM_PROVIDER ?? "bedrock") as
+  | "bedrock"
+  | "ollama"
+  | "huggingface"
+  | "openai";
 
-const DEFAULT_MODEL = ACTIVE_PROVIDER === "ollama"
-  ? (config.llm.ollama?.model ?? "llama3.2")
-  : ACTIVE_PROVIDER === "huggingface"
-  ? (config.llm.huggingface?.model ?? "meta-llama/Llama-3.3-70B-Instruct")
-  : ACTIVE_PROVIDER === "openai"
-  ? (config.llm.openai?.model ?? "gpt-4o-mini")
-  : (config.llm.bedrock?.model ?? "us.amazon.nova-pro-v1:0");
+const DEFAULT_MODEL =
+  ACTIVE_PROVIDER === "ollama"
+    ? (config.llm.ollama?.model ?? "llama3.2")
+    : ACTIVE_PROVIDER === "huggingface"
+      ? (config.llm.huggingface?.model ?? "meta-llama/Llama-3.3-70B-Instruct")
+      : ACTIVE_PROVIDER === "openai"
+        ? (config.llm.openai?.model ?? "gpt-4o-mini")
+        : (config.llm.bedrock?.model ?? "us.amazon.nova-pro-v1:0");
 
 /**
  * Builds the fallback chain dynamically from the static registry.
@@ -37,7 +47,8 @@ const DEFAULT_MODEL = ACTIVE_PROVIDER === "ollama"
 function buildFallbackChain(): FallbackChainEntry[] {
   const primaryConfig = getLLMModelConfig(DEFAULT_MODEL);
 
-  const candidates: { modelId: string; priority: number; provider: string }[] = [];
+  const candidates: { modelId: string; priority: number; provider: string }[] =
+    [];
 
   for (const [modelId, modelCfg] of Object.entries(LLM_REGISTRY)) {
     if (modelId === DEFAULT_MODEL) continue;
@@ -98,13 +109,19 @@ export class FallbackRouter {
 
       attemptNumber += 1;
       const isFallback = i > 0;
+      const attemptSteps: LLMGenerateStep[] = [];
 
       try {
         const provider = ProviderFactory.getLLMProvider(entry.provider);
 
-        const opts: LLMOptions = entry.model
-          ? { ...options, model: entry.model }
-          : options;
+        const opts: LLMOptions = {
+          ...options,
+          ...(entry.model ? { model: entry.model } : {}),
+          onToolStep: (step) => {
+            attemptSteps.push(step);
+            options.onToolStep?.(step);
+          },
+        };
 
         if (isFallback) {
           logger.warn("[FallbackRouter] Trying fallback model", {
@@ -123,7 +140,7 @@ export class FallbackRouter {
         if (options.requireToolCall) {
           const connectedToolNames = new Set(
             (options.tools || [])
-              .filter((tool) => tool.description.startsWith("[Connected "))
+              .filter((tool) => tool.source === "composio")
               .map((tool) => tool.name),
           );
           const executedConnectedTool = (result.steps || []).some((step) =>
@@ -149,8 +166,9 @@ export class FallbackRouter {
 
         const remainingHealthy = chain
           .slice(i + 1)
-          .filter((e) => modelHealth.isHealthy(e.model ?? "(provider-default)"))
-          .length;
+          .filter((e) =>
+            modelHealth.isHealthy(e.model ?? "(provider-default)"),
+          ).length;
 
         logger.error("[FallbackRouter] Model failed", {
           attempt: attemptNumber,
@@ -161,10 +179,31 @@ export class FallbackRouter {
           healthyModelsLeft: remainingHealthy,
         });
 
+        // Restarting a tool-aware turn with another model loses the provider's
+        // in-memory tool transcript and can cause different external mutations.
+        // Preserve the durable steps and stop here so the pipeline can report
+        // their verified outcome instead of replaying the workflow.
+        if (attemptSteps.length > 0) {
+          logger.warn(
+            "[FallbackRouter] Halting fallback after tool execution",
+            {
+              model: entry.model,
+              completedToolSteps: attemptSteps.length,
+            },
+          );
+          return {
+            text: "I couldn't finish the connected-app workflow because the language model became unavailable after tool execution. I won't report the requested action as complete without a confirmed result.",
+            steps: attemptSteps,
+          };
+        }
+
         if (failureType === ModelFailureType.MODEL_DEPRECATED) {
-          logger.warn("[FallbackRouter] Model deprecated — circuit open for 24h", {
-            modelId: entry.model,
-          });
+          logger.warn(
+            "[FallbackRouter] Model deprecated — circuit open for 24h",
+            {
+              modelId: entry.model,
+            },
+          );
         }
       }
     }

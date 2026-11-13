@@ -1,6 +1,6 @@
-import { parseMarkdown } from './utils/markdown';
-import { PROTO_VERSION, state } from './config';
-import { INTERAONE_LOGO_SVG } from '../shared/assets';
+import { parseMarkdown } from "./utils/markdown";
+import { PROTO_VERSION, state } from "./config";
+import { INTERAONE_LOGO_SVG } from "../shared/assets";
 export { INTERAONE_LOGO_SVG };
 
 // ── Pegtop 3D loader ─────────────────────────────────────────────────────────
@@ -8,10 +8,12 @@ export { INTERAONE_LOGO_SVG };
 const PEGTOP_SVG_PATH = `M63,37c-6.7-4-4-27-13-27s-6.3,23-13,27-27,4-27,13,20.3,9,27,13,4,27,13,27,6.3-23,13-27,27-4,27-13-20.3-9-27-13Z`;
 
 function pegtopSvg(id: string, delay?: string) {
-  const style = delay ? ` style="animation-delay:${delay}"` : '';
+  const style = delay ? ` style="animation-delay:${delay}"` : "";
   return `
     <svg id="${id}" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 100 100"${style}>
-      ${id === 'pegtopone' ? `
+      ${
+        id === "pegtopone"
+          ? `
       <defs>
         <filter id="shine-ldr"><feGaussianBlur stdDeviation="3"></feGaussianBlur></filter>
         <mask id="mask-ldr">
@@ -33,20 +35,22 @@ function pegtopSvg(id: string, delay?: string) {
         <path d="${PEGTOP_SVG_PATH}" fill="url(#grad-ldr-1)"></path>
         <path d="${PEGTOP_SVG_PATH}" fill="none" stroke="white" opacity="0.3" stroke-width="3" filter="url(#shine-ldr)" mask="url(#mask-ldr)"></path>
         <path d="${PEGTOP_SVG_PATH}" fill="url(#grad-ldr-2)"></path>
-      </g>` : `<g>
+      </g>`
+          : `<g>
         <path d="${PEGTOP_SVG_PATH}" fill="currentColor"></path>
         <path d="${PEGTOP_SVG_PATH}" fill="url(#grad-ldr-1)"></path>
         <path d="${PEGTOP_SVG_PATH}" fill="url(#grad-ldr-2)"></path>
-      </g>`}
+      </g>`
+      }
     </svg>`;
 }
 
 export function PegtopLoader(): string {
   return `
     <div class="pegtop-loader">
-      ${pegtopSvg('pegtopone')}
-      ${pegtopSvg('pegtoptwo', '0.3s')}
-      ${pegtopSvg('pegtopthree', '0.6s')}
+      ${pegtopSvg("pegtopone")}
+      ${pegtopSvg("pegtoptwo", "0.3s")}
+      ${pegtopSvg("pegtopthree", "0.6s")}
     </div>
   `;
 }
@@ -54,14 +58,14 @@ export function PegtopLoader(): string {
 // ── Tool call collapsible card ────────────────────────────────────────────────
 
 export function createToolStepsPanel(): HTMLElement {
-  const block = document.createElement('div');
-  block.className = 'tool-call-block';
+  const block = document.createElement("div");
+  block.className = "tool-call-block";
 
-  const card = document.createElement('div');
-  card.className = 'tool-call-card';
+  const card = document.createElement("div");
+  card.className = "tool-call-card";
 
-  const header = document.createElement('div');
-  header.className = 'tool-call-header';
+  const header = document.createElement("div");
+  header.className = "tool-call-header";
   header.innerHTML = `
     <span class="tool-call-header-icon">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
@@ -76,30 +80,31 @@ export function createToolStepsPanel(): HTMLElement {
     </span>
   `;
 
-  const body = document.createElement('div');
-  body.className = 'tool-call-body';
+  const body = document.createElement("div");
+  body.className = "tool-call-body";
 
-  const timeline = document.createElement('div');
-  timeline.className = 'tool-steps-timeline';
-  timeline.style.padding = '10px 12px';
+  const timeline = document.createElement("div");
+  timeline.className = "tool-steps-timeline";
+  timeline.style.padding = "10px 12px";
 
   body.appendChild(timeline);
   card.appendChild(header);
   card.appendChild(body);
   block.appendChild(card);
 
-  header.addEventListener('click', () => card.classList.toggle('is-collapsed'));
+  header.addEventListener("click", () => card.classList.toggle("is-collapsed"));
   (block as any)._timeline = timeline;
 
   return block;
 }
 
 export function addToolStep(panel: HTMLElement, label: string): HTMLElement {
-  const timeline = (panel as any)._timeline as HTMLElement
-    || panel.querySelector('.tool-steps-timeline') as HTMLElement;
+  const timeline =
+    ((panel as any)._timeline as HTMLElement) ||
+    (panel.querySelector(".tool-steps-timeline") as HTMLElement);
 
-  const step = document.createElement('div');
-  step.className = 'tool-step is-loading';
+  const step = document.createElement("div");
+  step.className = "tool-step is-loading";
   step.innerHTML = `
     <div class="tool-step-icon">
       <div class="tool-step-spinner"></div>
@@ -116,14 +121,18 @@ export function addToolStep(panel: HTMLElement, label: string): HTMLElement {
   return step;
 }
 
-export function completeToolStep(step: HTMLElement, detail?: string) {
-  step.classList.remove('is-loading');
-  step.classList.add('is-done');
+export function completeToolStep(
+  step: HTMLElement,
+  detail?: string,
+  failed = false,
+) {
+  step.classList.remove("is-loading");
+  step.classList.add(failed ? "is-failed" : "is-done");
 
   if (detail) {
-    const content = step.querySelector('.tool-step-content') as HTMLElement;
-    const detailEl = document.createElement('div');
-    detailEl.className = 'tool-step-detail';
+    const content = step.querySelector(".tool-step-content") as HTMLElement;
+    const detailEl = document.createElement("div");
+    detailEl.className = "tool-step-detail";
     detailEl.textContent = detail;
     content.appendChild(detailEl);
   }
@@ -132,8 +141,9 @@ export function completeToolStep(step: HTMLElement, detail?: string) {
 }
 
 export function removeToolStepsPanel() {
-  const blocks = elements.messagesContainer?.querySelectorAll('.tool-call-block');
-  blocks?.forEach(block => block.remove());
+  const blocks =
+    elements.messagesContainer?.querySelectorAll(".tool-call-block");
+  blocks?.forEach((block) => block.remove());
   state._toolStepsEl = null;
 }
 
@@ -154,12 +164,14 @@ export const elements = {
   historyOverlay: document.getElementById("historyOverlay"),
   closeHistoryBtn: document.getElementById("closeHistoryBtn"),
   historyList: document.getElementById("historyList"),
-  historySearch: document.getElementById("historySearch") as HTMLInputElement | null,
+  historySearch: document.getElementById(
+    "historySearch",
+  ) as HTMLInputElement | null,
   maximizeBtn: document.getElementById("vx-maximize"),
   minimizeBtn: document.getElementById("vx-minimize"),
-  newChatBtn: document.getElementById('newChatBtn') as HTMLButtonElement | null,
-  tabChat: document.getElementById('tabChat') as HTMLButtonElement | null,
-  tabHistory: document.getElementById('tabHistory') as HTMLButtonElement | null,
+  newChatBtn: document.getElementById("newChatBtn") as HTMLButtonElement | null,
+  tabChat: document.getElementById("tabChat") as HTMLButtonElement | null,
+  tabHistory: document.getElementById("tabHistory") as HTMLButtonElement | null,
 };
 
 // ── Typing / loading indicators ───────────────────────────────────────────────
@@ -170,8 +182,8 @@ let _openSkeletonTimer: number | null = null;
 
 export function showTypingDots(_context?: string) {
   if (_typingDotsEl) return;
-  const wrapper = document.createElement('div');
-  wrapper.className = 'loader-wrapper';
+  const wrapper = document.createElement("div");
+  wrapper.className = "loader-wrapper";
   if (state._escalationShown) {
     wrapper.innerHTML = `
       <div class="three-dots-loader" aria-label="Agent is typing">
@@ -197,8 +209,8 @@ export function removeTypingDots() {
 
 export function showTyping() {
   if (_agentTypingEl) return;
-  const wrapper = document.createElement('div');
-  wrapper.className = 'loader-wrapper';
+  const wrapper = document.createElement("div");
+  wrapper.className = "loader-wrapper";
   if (state._escalationShown) {
     wrapper.innerHTML = `
       <div class="three-dots-loader" aria-label="Agent is typing">
@@ -225,18 +237,21 @@ export function hideTyping() {
 export function showOpenSkeleton(durationMs = 1000) {
   const root = elements.appRoot as HTMLElement | null;
   if (!root) return;
-  root.classList.add('is-skeleton');
+  root.classList.add("is-skeleton");
   if (_openSkeletonTimer) window.clearTimeout(_openSkeletonTimer);
-  _openSkeletonTimer = window.setTimeout(() => {
-    root.classList.remove('is-skeleton');
-    _openSkeletonTimer = null;
-  }, Math.max(200, durationMs));
+  _openSkeletonTimer = window.setTimeout(
+    () => {
+      root.classList.remove("is-skeleton");
+      _openSkeletonTimer = null;
+    },
+    Math.max(200, durationMs),
+  );
 }
 
 // ── UI helpers ────────────────────────────────────────────────────────────────
 
 export function getInitials(name: string): string {
-  if (!name) return 'A';
+  if (!name) return "A";
   const parts = name.trim().split(/\s+/);
   if (parts.length >= 2) {
     return (parts[0][0] + parts[1][0]).toUpperCase();
@@ -248,8 +263,8 @@ export function showAgentConnectedCard(name: string) {
   if (!elements.messagesContainer || state._joinCardShown) return;
   state._joinCardShown = true;
   const initial = getInitials(name);
-  const card = document.createElement('div');
-  card.className = 'agent-join-card';
+  const card = document.createElement("div");
+  card.className = "agent-join-card";
   card.innerHTML = `
     <div class="agent-join-avatar">${initial}</div>
     <div class="agent-join-info">
@@ -270,26 +285,34 @@ export function adjustTextareaHeight() {
 function reportConversationState(started: boolean) {
   if (!window.parent) return;
   window.parent.postMessage(
-    { type: 'CONVERSATION_STATE', version: PROTO_VERSION, payload: { started } },
-    state.parentOrigin || '*',
+    {
+      type: "CONVERSATION_STATE",
+      version: PROTO_VERSION,
+      payload: { started },
+    },
+    state.parentOrigin || "*",
   );
 }
 
 export function showWelcomeScreen() {
-  document.documentElement.classList.add('is-new-chat');
-  document.body.classList.add('is-new-chat');
-  if (elements.welcomeScreen) elements.welcomeScreen.style.display = 'flex';
-  if (elements.suggestionsContainer) elements.suggestionsContainer.style.display = '';
-  if (elements.messagesContainer) elements.messagesContainer.style.display = 'none';
+  document.documentElement.classList.add("is-new-chat");
+  document.body.classList.add("is-new-chat");
+  if (elements.welcomeScreen) elements.welcomeScreen.style.display = "flex";
+  if (elements.suggestionsContainer)
+    elements.suggestionsContainer.style.display = "";
+  if (elements.messagesContainer)
+    elements.messagesContainer.style.display = "none";
   reportConversationState(false);
 }
 
 export function hideWelcomeScreen() {
-  document.documentElement.classList.remove('is-new-chat');
-  document.body.classList.remove('is-new-chat');
-  if (elements.welcomeScreen) elements.welcomeScreen.style.display = 'none';
-  if (elements.suggestionsContainer) elements.suggestionsContainer.style.display = 'none';
-  if (elements.messagesContainer) elements.messagesContainer.style.display = 'flex';
+  document.documentElement.classList.remove("is-new-chat");
+  document.body.classList.remove("is-new-chat");
+  if (elements.welcomeScreen) elements.welcomeScreen.style.display = "none";
+  if (elements.suggestionsContainer)
+    elements.suggestionsContainer.style.display = "none";
+  if (elements.messagesContainer)
+    elements.messagesContainer.style.display = "flex";
   reportConversationState(true);
 }
 
@@ -301,7 +324,7 @@ function setMessagesContainerToBottom() {
   if (!container) return;
 
   const previousScrollBehavior = container.style.scrollBehavior;
-  container.style.scrollBehavior = 'auto';
+  container.style.scrollBehavior = "auto";
   container.scrollTop = container.scrollHeight;
   container.style.scrollBehavior = previousScrollBehavior;
 }
@@ -358,20 +381,26 @@ export function renderMaximizeIcon() {
 }
 
 export function addSystemNotice(text: string) {
-  const el = document.createElement('div');
-  el.className = 'system-notice';
-  const plain = text.replace(/\*\*(.+?)\*\*/g, '$1');
-  el.innerHTML = '<span>' + plain.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</span>';
+  const el = document.createElement("div");
+  el.className = "system-notice";
+  const plain = text.replace(/\*\*(.+?)\*\*/g, "$1");
+  el.innerHTML =
+    "<span>" + plain.replace(/</g, "&lt;").replace(/>/g, "&gt;") + "</span>";
   elements.messagesContainer?.appendChild(el);
   scrollToBottom();
 }
 
 export function escapeHtml(str: string) {
-  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }
 
 export function renderAgentResponseIcon(senderName?: string) {
-  const isHuman = state._escalationShown || (senderName && senderName !== "AI Assistant");
+  const isHuman =
+    state._escalationShown || (senderName && senderName !== "AI Assistant");
   if (isHuman && senderName) {
     if (senderName === "Support Team") {
       return `
@@ -396,25 +425,48 @@ export function renderAgentResponseIcon(senderName?: string) {
   `;
 }
 
-export function addMessage(text: string, type: 'user' | 'agent', senderName: string, msgType: string = 'text') {
+export function addMessage(
+  text: string,
+  type: "user" | "agent",
+  senderName: string,
+  msgType: string = "text",
+) {
   if (!elements.messagesContainer) return;
   hideWelcomeScreen();
   const messageDiv = document.createElement("div");
   messageDiv.className = `message ${type}`;
-  if (msgType === 'file-uploading') messageDiv.classList.add('upload-placeholder');
+  if (msgType === "file-uploading")
+    messageDiv.classList.add("upload-placeholder");
 
-  const time = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const time = new Date().toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 
   let bodyHtml: string;
-  if (msgType === 'file' || msgType === 'file-uploading' || msgType === 'image') {
+  if (
+    msgType === "file" ||
+    msgType === "file-uploading" ||
+    msgType === "image"
+  ) {
     bodyHtml = escapeHtml(text);
-  } else if (type === 'agent') {
-    bodyHtml = '<div class="md">' + parseMarkdown(text) + '</div><div class="message-time">' + time + '</div>';
+  } else if (type === "agent") {
+    bodyHtml =
+      '<div class="md">' +
+      parseMarkdown(text) +
+      '</div><div class="message-time">' +
+      time +
+      "</div>";
   } else {
-    bodyHtml = escapeHtml(text) + '<div class="message-time">' + time + '</div>';
+    bodyHtml =
+      escapeHtml(text) + '<div class="message-time">' + time + "</div>";
   }
 
-  messageDiv.innerHTML = (type === 'agent' ? renderAgentResponseIcon(senderName) : '') + '<div class="message-bubble">' + bodyHtml + '</div>';
+  messageDiv.innerHTML =
+    (type === "agent" ? renderAgentResponseIcon(senderName) : "") +
+    '<div class="message-bubble">' +
+    bodyHtml +
+    "</div>";
   elements.messagesContainer.appendChild(messageDiv);
   scrollToBottom();
 }
@@ -424,21 +476,37 @@ export function typeMessage(text: string, senderName?: string) {
   if (!elements.messagesContainer) return;
   hideWelcomeScreen();
 
-  const messageDiv = document.createElement('div');
-  messageDiv.className = 'message agent';
-  const bubble = document.createElement('div');
-  bubble.className = 'message-bubble';
-  const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  bubble.innerHTML = '<div class="md">' + parseMarkdown(text) + '</div><div class="message-time">' + time + '</div>';
+  const messageDiv = document.createElement("div");
+  messageDiv.className = "message agent";
+  const bubble = document.createElement("div");
+  bubble.className = "message-bubble";
+  const time = new Date().toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  bubble.innerHTML =
+    '<div class="md">' +
+    parseMarkdown(text) +
+    '</div><div class="message-time">' +
+    time +
+    "</div>";
   messageDiv.innerHTML = renderAgentResponseIcon(senderName);
   messageDiv.appendChild(bubble);
   elements.messagesContainer.appendChild(messageDiv);
   scrollToBottom();
 }
 
-export function formatHistoryDateTime(value: string | number | Date | undefined): string {
-  if (!value) return 'Unknown date';
+export function formatHistoryDateTime(
+  value: string | number | Date | undefined,
+): string {
+  if (!value) return "Unknown date";
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return 'Unknown date';
-  return date.toLocaleString([], { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  if (Number.isNaN(date.getTime())) return "Unknown date";
+  return date.toLocaleString([], {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }

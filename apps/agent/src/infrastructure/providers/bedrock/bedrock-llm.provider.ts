@@ -20,10 +20,15 @@ import { estimateCost } from "../observability/cost-tracker";
 import { LatencyTracker } from "../observability/latency-tracker";
 import { TokenTracker } from "../observability/token-tracker";
 import {
-  cleanFinalResponse,
+  cleanAssistantResponse,
   TOOL_LIMIT_FINAL_RESPONSE_INSTRUCTION,
 } from "../utils/tool-limit";
 import { buildToolInputSchema } from "../utils/tool-schema";
+import {
+  executeToolBatch,
+  MAX_TOOL_LOOPS,
+  toolOutcomeContent,
+} from "../../../modules/agents/tool-loop";
 
 export class BedrockLLMProvider implements LLMProvider {
   readonly name = "bedrock";
@@ -217,8 +222,6 @@ export class BedrockLLMProvider implements LLMProvider {
           }
         : undefined;
 
-    const MAX_TOOL_LOOPS = 5;
-    const createTicketResults = new Map<string, unknown>();
     const steps: LLMGenerateStep[] = [];
 
     let loop = 0;
@@ -307,7 +310,7 @@ export class BedrockLLMProvider implements LLMProvider {
                 continue;
               }
 
-              onStream?.(cleanText, false);
+              if (tools.length === 0) onStream?.(cleanText, false);
             }
 
             const blockStart = (
@@ -410,11 +413,13 @@ export class BedrockLLMProvider implements LLMProvider {
       }
 
       if (toolUses.length === 0) {
-        const cleanText = responseText
-          .replace(/<(thinking|thought)>[\s\S]*?<\/\1>/gi, "")
-          .replace(/<(thinking|thought)>[\s\S]*$/gi, "")
-          .replace(/<\/?(?:thinking|thought)>/gi, "")
-          .trim();
+        const cleanText = cleanAssistantResponse(
+          responseText,
+          tools.map((tool) => tool.name),
+        );
+        if (onStream && tools.length > 0 && cleanText) {
+          onStream(cleanText, false);
+        }
         return {
           text: cleanText || "Sorry, I could not generate a response.",
           usage: tokenTracker.toUsage(),
@@ -433,143 +438,41 @@ export class BedrockLLMProvider implements LLMProvider {
         })) as any,
       });
 
-      const toolResultsContent: unknown[] = [];
-      for (const call of toolUses) {
-        const tool = tools.find((t) => t.name === call.name);
-        if (!tool) continue;
-
-        const toolLabels: Record<string, { label: string; detail?: string }> = {
-          faq_retrieval: { label: "Searching FAQs" },
-          knowledge_retrieval: { label: "Searching uploaded knowledge" },
-          web_crawl: { label: "Searching web" },
-          conversation_memory: { label: "Checking conversation history" },
-          seek_contact: { label: "Looking up contact" },
-          create_ticket: { label: "Creating ticket" },
-          update_ticket: { label: "Updating ticket" },
-          close_ticket: { label: "Closing ticket" },
-          send_email: { label: "Sending email" },
-          escalate_to_human: { label: "Connecting to human agent" },
-          verify_email_otp: { label: "Verifying code" },
-          update_contact_profile: { label: "Saving contact details" },
-          mark_query_resolved: { label: "Marking query resolved" },
-        };
-
-        const toolMeta = toolLabels[call.name] || { label: "Working on it" };
-
-        // Emit tool start event
-        if (onToolEvent) {
-          onToolEvent({
-            type: "start",
-            toolName: call.name,
-            label: toolMeta.label,
-          });
-        }
-
-        let result: unknown;
-        let stepError: string | undefined;
-        const stepTimestamp = new Date();
-        const sanitizedInput = {
-          ...((call.input as Record<string, unknown>) || {}),
-          ...(toolContext?.conversationId
-            ? { conversationId: toolContext.conversationId }
-            : {}),
-          ...(toolContext?.organizationId
-            ? { organizationId: toolContext.organizationId }
-            : {}),
-        };
-
-        try {
-          const requestKey = `${toolContext?.organizationId || ""}:${toolContext?.conversationId || ""}:${toolContext?.messageId || ""}`;
-          if (
-            call.name === "create_ticket" &&
-            createTicketResults.has(requestKey)
-          ) {
-            result = createTicketResults.get(requestKey);
-          } else {
-            result = await tool.execute(sanitizedInput, toolContext);
-            if (call.name === "create_ticket") {
-              createTicketResults.set(requestKey, result);
-            }
-          }
-
-          toolResultsContent.push({
-            toolResult: {
-              toolUseId: call.toolUseId,
-              status: "success",
-              content: [
+      const outcomes = await executeToolBatch({
+        calls: toolUses.map((call) => ({
+          id: call.toolUseId,
+          name: call.name,
+          input: call.input,
+        })),
+        tools,
+        context: toolContext,
+        onToolEvent,
+      });
+      outcomes.forEach((outcome) => {
+        if (!outcome.deferred) options.onToolStep?.(outcome.step);
+      });
+      const toolResultsContent = outcomes.map((outcome) => ({
+        toolResult: {
+          toolUseId: outcome.call.id,
+          status: outcome.step.error ? "error" : "success",
+          content: outcome.step.error
+            ? [{ text: toolOutcomeContent(outcome) }]
+            : [
                 {
                   json:
-                    typeof result === "string"
-                      ? (JSON.parse(result) as object)
-                      : (result as object),
+                    typeof outcome.step.result === "object" &&
+                    outcome.step.result !== null
+                      ? (outcome.step.result as object)
+                      : { value: outcome.step.result },
                 },
               ],
-            },
-          });
-
-          // Emit tool complete event
-          if (onToolEvent) {
-            let detail: string | undefined;
-            if (
-              (call.name === "faq_retrieval" ||
-                call.name === "knowledge_retrieval") &&
-              result &&
-              typeof result === "object"
-            ) {
-              const r = result as any;
-              if (r.results && Array.isArray(r.results)) {
-                detail = `Retrieved ${r.results.length} document${r.results.length !== 1 ? "s" : ""}`;
-              } else if (r.status === "no_results") {
-                detail = "No relevant content found";
-              }
-            } else if (
-              call.name === "create_ticket" &&
-              result &&
-              typeof result === "object"
-            ) {
-              const r = result as any;
-              if (r.ticketNumber) detail = `Ticket ${r.ticketNumber}`;
-            } else if (call.name === "web_crawl") {
-              detail = "Content retrieved";
-            }
-
-            onToolEvent({
-              type: "complete",
-              toolName: call.name,
-              label: toolMeta.label,
-              detail,
-            });
-          }
-        } catch (e: unknown) {
-          stepError = e instanceof Error ? e.message : String(e);
-          result = { error: stepError };
-          toolResultsContent.push({
-            toolResult: {
-              toolUseId: call.toolUseId,
-              status: "error",
-              content: [{ text: stepError }],
-            },
-          });
-
-          // Emit tool complete event with error detail
-          if (onToolEvent) {
-            onToolEvent({
-              type: "complete",
-              toolName: call.name,
-              label: toolMeta.label,
-              detail: "Failed",
-            });
-          }
-        }
-
-        steps.push({
-          toolName: call.name,
-          args: sanitizedInput,
-          result,
-          error: stepError,
-          timestamp: stepTimestamp,
-        });
-      }
+        },
+      }));
+      steps.push(
+        ...outcomes
+          .filter((outcome) => !outcome.deferred)
+          .map((outcome) => outcome.step),
+      );
 
       converseMessages.push({
         role: "user",
@@ -597,7 +500,7 @@ export class BedrockLLMProvider implements LLMProvider {
           const text = chunk.contentBlockDelta?.delta?.text;
           if (text) {
             responseText += text;
-            onStream(text, false);
+            if (tools.length === 0) onStream(text, false);
           }
 
           const usage = chunk.metadata?.usage;
@@ -633,7 +536,13 @@ export class BedrockLLMProvider implements LLMProvider {
       }
     }
 
-    const finalCleanText = cleanFinalResponse(responseText);
+    const finalCleanText = cleanAssistantResponse(
+      responseText,
+      tools.map((tool) => tool.name),
+    );
+    if (onStream && tools.length > 0 && finalCleanText) {
+      onStream(finalCleanText, false);
+    }
 
     return {
       text:

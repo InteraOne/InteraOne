@@ -11,7 +11,6 @@ import {
 } from "../utils/chat.utils";
 import { makeTimer } from "../../../shared/timing";
 import { Channel, MiddlewareContext, MiddlewareResult } from "../chat.types";
-import { isDirectToolExecutionRequest } from "../../agents/tools/connected-tool-routing";
 import { shouldGroundKnowledgeRequest } from "./knowledge-grounding";
 
 // Re-export makeTimer so callers can construct a MiddlewareContext conveniently
@@ -224,11 +223,12 @@ async function checkFaqFastPath(
     return { shouldReturn: false };
   }
 
-  // Execution commands must reach dynamic connected-tool discovery. A semantic
-  // FAQ hit is documentation, not evidence that an external action ran.
-  if (isDirectToolExecutionRequest(content)) {
+  // When connected apps are enabled, the LLM must decide whether a request is
+  // an execution intent using native session tools. The FAQ shortcut cannot
+  // safely substitute documentation for a real external action.
+  if (process.env.COMPOSIO_ENABLED === "true") {
     console.log(
-      "[Pipeline] Skipping FAQ check for direct tool execution intent",
+      "[Pipeline] Skipping FAQ fast-path while Composio sessions are enabled",
     );
     return { shouldReturn: false };
   }

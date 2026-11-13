@@ -16,11 +16,9 @@ import { redactOtpForLog } from "../utils/chat.utils";
 import { makeTimer } from "../../../shared/timing";
 import { executePreChecks } from "./gates.middleware";
 import {
-  connectedToolExecutionInstruction,
-  formatConnectedToolError,
-  isConnectedTool,
-  shouldRequireConnectedToolCall,
-} from "../../agents/tools/connected-tool-routing";
+  composioSessionInstruction,
+  isComposioSessionTool,
+} from "../../agents/tools/composio-session.tools";
 import {
   broaderKnowledgeQuery,
   containsFabricatedPlaceholder,
@@ -163,22 +161,11 @@ Do not use model memory for facts. Do not invent names, expansions of acronyms, 
       // Capabilities are resolved from the registry — no string matching
       const provider = ProviderFactory.getLLMProvider();
       const capabilities = await provider.getCapabilities();
-      // Put the current request first so capability search is not dominated by
-      // an earlier assistant response or a long conversation history. Recent
-      // context remains available for short follow-ups that reference it.
-      const toolQuery = [
-        content,
-        ...context.messages.slice(-6).map((message) => message.content),
-      ]
-        .join("\n")
-        .slice(0, 2_000);
       const toolResolution = await getToolsForContext({
         fallbackToAgent: job.fallbackToAgent,
         channel,
         organizationId: job.organizationId,
         conversationId: job.conversationId,
-        query: toolQuery,
-        request: content,
       });
       // Evidence is already retrieved for a factual knowledge turn. Sending
       // the tool catalog would add schema tokens and allow duplicate searches.
@@ -188,41 +175,10 @@ Do not use model memory for facts. Do not invent names, expansions of acronyms, 
           : toolResolution.tools
         : [];
 
-      if (
-        toolResolution.connectedIntent &&
-        (!capabilities.supportsTools ||
-          toolResolution.connectedStatus !== "ready" ||
-          tools.length === 0)
-      ) {
-        const discoveryError = !capabilities.supportsTools
-          ? "The active language model does not support tool execution"
-          : toolResolution.connectedMessage;
-        steps.push({
-          toolName: "connected_tool_discovery",
-          args: { query: content, channel },
-          result: {
-            status: toolResolution.connectedStatus,
-            relevantToolkits: toolResolution.relevantToolkits,
-          },
-          error: discoveryError,
-          timestamp: new Date(),
-        });
-        await publishResponse({
-          conversationId,
-          messageId: job.messageId,
-          content: `I couldn't execute that connected-app request: ${discoveryError}.`,
-        });
-        console.timeEnd(t("agent"));
-        return;
-      }
-      const hasConnectedTools = tools.some(isConnectedTool);
-      const requireConnectedToolCall = shouldRequireConnectedToolCall(
-        content,
-        tools,
-      );
+      const hasConnectedTools = tools.some(isComposioSessionTool);
 
       if (hasConnectedTools) {
-        messages[0].content += connectedToolExecutionInstruction();
+        messages[0].content += composioSessionInstruction();
       }
 
       console.time(t("llm"));
@@ -232,7 +188,7 @@ Do not use model memory for facts. Do not invent names, expansions of acronyms, 
       // FallbackRouter wraps generation with an ordered provider fallback chain
       const generated = await FallbackRouter.generate(messages, {
         tools,
-        requireToolCall: requireConnectedToolCall,
+        temperature: hasConnectedTools ? 0 : undefined,
         toolContext: {
           organizationId: job.organizationId,
           conversationId: job.conversationId,
@@ -286,7 +242,7 @@ Do not use model memory for facts. Do not invent names, expansions of acronyms, 
       console.timeEnd(t("agent"));
 
       const connectedToolNames = new Set(
-        tools.filter(isConnectedTool).map((tool) => tool.name),
+        tools.filter(isComposioSessionTool).map((tool) => tool.name),
       );
       const connectedSteps = (generated.steps || []).filter((step) =>
         connectedToolNames.has(step.toolName),
@@ -295,15 +251,81 @@ Do not use model memory for facts. Do not invent names, expansions of acronyms, 
       // can recover on the next loop. Only the final connected execution state
       // is authoritative; do not overwrite a later success with an earlier
       // recoverable error.
+      const stateOf = (step: (typeof connectedSteps)[number]) =>
+        step.result && typeof step.result === "object"
+          ? (step.result as Record<string, unknown>)
+          : undefined;
+      let lastFailureIndex = -1;
+      connectedSteps.forEach((step, index) => {
+        const resultState = stateOf(step)?.status;
+        if (
+          step.error ||
+          resultState === "failed" ||
+          resultState === "uncertain" ||
+          resultState === "blocked"
+        ) {
+          lastFailureIndex = index;
+        }
+      });
+      const failedState =
+        lastFailureIndex >= 0
+          ? stateOf(connectedSteps[lastFailureIndex])
+          : undefined;
+      const recoveredFailure =
+        lastFailureIndex >= 0 &&
+        connectedSteps.slice(lastFailureIndex + 1).some((step) => {
+          const result = stateOf(step);
+          if (result?.status !== "completed") return false;
+          if (failedState?.executed === false) return true;
+          if (failedState?.phase === "discovery") return true;
+          if (failedState?.phase === "schema") {
+            return result.phase === "schema" || result.phase === "execution";
+          }
+          if (failedState?.mutating === true) return result.mutating === true;
+          if (failedState?.phase === "execution") {
+            return result.phase === "execution";
+          }
+          return result.mutating === true;
+        });
+      const connectedFailure =
+        lastFailureIndex >= 0 && !recoveredFailure
+          ? connectedSteps[lastFailureIndex]
+          : undefined;
+      const successfulMutationBeforeFailure =
+        lastFailureIndex > 0
+          ? connectedSteps
+              .slice(0, lastFailureIndex)
+              .reverse()
+              .find((step) => {
+                const result = stateOf(step);
+                return (
+                  result?.status === "completed" && result.mutating === true
+                );
+              })
+          : undefined;
       const finalConnectedStep = connectedSteps[connectedSteps.length - 1];
-      const connectedFailure = finalConnectedStep?.error
-        ? finalConnectedStep
+      const finalConnectedResult =
+        finalConnectedStep?.result &&
+        typeof finalConnectedStep.result === "object"
+          ? (finalConnectedStep.result as Record<string, unknown>)
+          : undefined;
+      const connectedFailureResult = connectedFailure
+        ? stateOf(connectedFailure)
         : undefined;
+      const connectedFailureMessage =
+        connectedFailure?.error ||
+        connectedFailureResult?.error ||
+        connectedFailureResult?.message ||
+        "the provider did not confirm completion";
       // Do not let a model turn a real provider failure into a success claim or
       // an invented authentication workflow. The execution error is the answer.
       generatedText = connectedFailure
-        ? `I couldn't execute the connected-app request after retrying: ${formatConnectedToolError(connectedFailure.error)}.`
-        : generated.text;
+        ? successfulMutationBeforeFailure
+          ? `The connected-app action completed successfully, but I couldn't verify the result: ${String(connectedFailureMessage).replace(/\s+/g, " ").slice(0, 400)}. I did not repeat the completed action.`
+          : `I couldn't complete the connected-app request: ${String(connectedFailureMessage).replace(/\s+/g, " ").slice(0, 400)}.`
+        : finalConnectedResult?.status === "approval_required"
+          ? `This action has not run yet because it requires your approval. ${JSON.stringify(finalConnectedResult.questions || {}).slice(0, 1200)} Please approve or deny this action.`
+          : generated.text;
       if (
         groundedKnowledgeTurn &&
         containsFabricatedPlaceholder(generatedText)
@@ -322,16 +344,12 @@ Do not use model memory for facts. Do not invent names, expansions of acronyms, 
         providerErr instanceof Error
           ? providerErr.message
           : String(providerErr);
-      const connectedToolWasSkipped = providerMessage.includes(
-        "Required connected tool was not executed",
-      );
       const canEscalate = job.fallbackToAgent !== false;
-      const fallback = connectedToolWasSkipped
-        ? `I couldn't execute the connected-app request: ${providerMessage}.`
-        : "I'm sorry - I'm having trouble connecting right now. Please try again in a moment." +
-          (canEscalate
-            ? " If you need immediate help, I can connect you to a human agent."
-            : "");
+      const fallback =
+        "I'm sorry - I'm having trouble connecting right now. Please try again in a moment." +
+        (canEscalate
+          ? " If you need immediate help, I can connect you to a human agent."
+          : "");
       await waitForPendingStream(conversationId, job.messageId);
       await publishResponse({
         conversationId,
@@ -339,7 +357,7 @@ Do not use model memory for facts. Do not invent names, expansions of acronyms, 
         content: fallback,
       });
 
-      if (canEscalate && !connectedToolWasSkipped) {
+      if (canEscalate) {
         try {
           await InternalApiService.escalateConversation(conversationId, {
             organizationId: job.organizationId,

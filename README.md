@@ -96,14 +96,14 @@ make all
 
 ### Optional Composio integrations
 
-Workspace admins can connect allowlisted third-party tools through Composio. The feature is disabled by default and runs only in `apps/gateway`; no provider token or Composio API key is sent to the browser or stored in InteraOne.
+Workspace admins can connect any supported Composio toolkit and choose its exact permitted actions. The feature is disabled by default and the SDK runs only in `apps/gateway`; provider tokens and the Composio API key never enter the browser or AI worker.
 
-1. Create a Composio project and enable its managed GitHub auth configuration.
+1. Create a Composio project and enable the managed auth configurations you need.
 2. Allow your console URL (for example `https://app.example.com/dashboard/integrations`) as the Connect Link redirect.
 3. Set `COMPOSIO_ENABLED=true`, `COMPOSIO_API_KEY`, and `COMPOSIO_REDIRECT_URL` for the gateway. Set `COMPOSIO_ENVIRONMENT` to a stable deployment name so scoped user identities remain stable.
-4. Restart the gateway, open **Integrations → AI tool connections**, and connect GitHub.
+4. Restart the gateway, open **Integrations → AI tool connections**, select permitted actions, and connect the application.
 
-The initial policy enables only `GITHUB_SEARCH_REPOSITORIES`. An admin may opt into additional actions such as `GITHUB_CREATE_AN_ISSUE`. Once an action is enabled in the workspace policy, the agent executes it immediately through the connected Composio account and reports success only from the provider result.
+Each AI conversation receives a tenant-scoped Composio Session containing only native meta-tools. The model discovers schemas and dependencies at runtime, while the gateway pins organization-owned accounts and enforces the current per-tool policy on every call. Read actions default on for a new toolkit; writes require explicit admin enablement, and destructive actions additionally pause for user approval. Session execution is bounded and audited, and successful mutations are durably deduplicated.
 
 <hr/>
 

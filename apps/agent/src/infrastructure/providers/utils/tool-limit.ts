@@ -15,3 +15,36 @@ export function cleanFinalResponse(text: string): string {
     .replace(/<\/?(?:thinking|thought)>/gi, "")
     .trim();
 }
+
+function protocolToken(value: string): string {
+  let result = "";
+  for (const character of value.toUpperCase()) {
+    if (
+      (character >= "A" && character <= "Z") ||
+      (character >= "0" && character <= "9") ||
+      '[]<>(){}:"'.includes(character)
+    ) {
+      result += character;
+    }
+  }
+  return result;
+}
+
+/** Reject textual function syntax; tool-capable providers must use native calls. */
+export function cleanAssistantResponse(
+  text: string,
+  toolNames: string[],
+): string {
+  const cleaned = cleanFinalResponse(text);
+  if (!cleaned || toolNames.length === 0) return cleaned;
+  const token = protocolToken(cleaned);
+  const serialized =
+    token.includes("<TOOLCALL>") ||
+    toolNames.some((name) => token.includes(`${protocolToken(name)}(`));
+  if (serialized) {
+    throw new Error(
+      "The language model emitted textual tool-call syntax instead of a native structured tool call",
+    );
+  }
+  return cleaned;
+}
