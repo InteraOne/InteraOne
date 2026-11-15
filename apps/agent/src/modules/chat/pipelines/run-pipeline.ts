@@ -16,9 +16,9 @@ import { redactOtpForLog } from "../utils/chat.utils";
 import { makeTimer } from "../../../shared/timing";
 import { executePreChecks } from "./gates.middleware";
 import {
-  composioSessionInstruction,
   isComposioSessionTool,
 } from "../../agents/tools/composio-session.tools";
+import { composioSessionInstruction } from "../services/system-prompt/sections/composio";
 import {
   broaderKnowledgeQuery,
   containsFabricatedPlaceholder,

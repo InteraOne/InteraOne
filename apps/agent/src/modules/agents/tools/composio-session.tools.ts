@@ -90,36 +90,6 @@ function updateSchemaState(state: SessionSchemaState, result: unknown): void {
   }
 }
 
-export function composioSessionInstruction(): string {
-  return `
-
-<composio_session>
-Native Composio session meta-tools are available. Use them for requests involving connected applications.
-- Start with COMPOSIO_SEARCH_TOOLS to discover the correct actions and dependency plan at runtime.
-- COMPOSIO_SEARCH_TOOLS only discovers tools and schemas; it does not read records from the connected application. Execute the discovered read tool to obtain real records and IDs.
-- Every COMPOSIO_* meta-tool is a top-level native function. Never put COMPOSIO_SEARCH_TOOLS, COMPOSIO_GET_TOOL_SCHEMAS, COMPOSIO_MULTI_EXECUTE_TOOL, or any other COMPOSIO_* name inside MULTI_EXECUTE_TOOL.tools.
-- Issue exactly one top-level COMPOSIO_* call per assistant turn. Wait for its structured result before constructing the next call. Calls emitted later in the same turn are deliberately not executed.
-- Full schemas missing from discovery are loaded automatically through COMPOSIO_GET_TOOL_SCHEMAS before execution. Copy tool slugs and arguments exactly from discovery/schema results; never shorten, rename, or infer a slug.
-- COMPOSIO_MULTI_EXECUTE_TOOL.tools may contain only application tool slugs returned by the current discovery response, with arguments copied from their actual input schemas.
-- Execute discovered application tools through COMPOSIO_MULTI_EXECUTE_TOOL. Resolve IDs and prerequisites with authorized read tools before mutations.
-- Never call a discovered application tool slug as a top-level function; place it inside COMPOSIO_MULTI_EXECUTE_TOOL.
-- Treat read results as dependency outputs: copy returned stable IDs into later calls exactly. Never replace an ID with a guessed title, display name, workspace name, path, or other label.
-- Read the immediately preceding tool result directly. For MULTI_EXECUTE_TOOL, each results[] entry contains its tool_slug and response; when response.successful is true, copy required IDs and URLs from response.data into the next call.
-- Never send placeholders such as PAGE_ID_FROM_SEARCH, NEW_PAGE_ID, YOUR_ID, example IDs, or invented values.
-- Execute dependent operations in separate turns: first the prerequisite read, then the mutation using its literal result, then verification using the mutation's literal result. Do not batch operations when a later operation needs an earlier operation's output.
-- COMPOSIO_MULTI_EXECUTE_TOOL executes its inner tools in parallel. When a create or update requires a parent/container and the user did not specify one, first list or search accessible containers. In the next turn use the literal stable ID of an actual returned container; never use a workspace or account display name as that ID.
-- Carry the session_id returned by Composio into every subsequent meta-tool call in that workflow when instructed.
-- After a failed mutation, inspect its error and change the underlying arguments or dependency plan. Never retry the same action with semantically identical arguments.
-- Never invent IDs, account data, file references, arguments, provider results, or completion claims.
-- A result with status approval_required means nothing ran. Explain the exact pending action and ask the user for approval. On their next response, use INTERAONE_RESOLVE_COMPOSIO_APPROVAL with the listed approval ID.
-- Never call the approval resolver unless the current user explicitly approves or denies the displayed action.
-- Treat failed, blocked, uncertain, and approval_required results as not completed.
-- Do not repeat a successful mutation. Use authorized reads for verification when needed.
-- Recover from schema or provider validation errors by correcting the plan or arguments, within the tool-loop limit.
-- Claim success only from a completed execution result and include the provider-confirmed identifiers or outcome.
-</composio_session>`;
-}
-
 function wrapSessionTool(
   nativeTool: NativeComposioTool,
   sessionId: string,
