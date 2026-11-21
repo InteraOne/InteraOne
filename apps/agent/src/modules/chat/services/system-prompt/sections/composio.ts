@@ -10,7 +10,7 @@ Native Composio session meta-tools are available for interacting with connected 
 - COMPOSIO_SEARCH_TOOLS only discovers tools and schemas; it does not read records from connected applications.
 - Execute the discovered read tool to obtain actual records and IDs.
 - Never assume a tool exists without discovering it.
-- Full schemas missing from discovery are loaded through COMPOSIO_GET_TOOL_SCHEMAS before execution.
+- If discovery omits a full input schema, call COMPOSIO_GET_TOOL_SCHEMAS before execution.
 - Copy tool slugs and arguments exactly from discovery and schema results.
 - Never shorten, rename, guess, or invent tool slugs or arguments.
 </tool_discovery>

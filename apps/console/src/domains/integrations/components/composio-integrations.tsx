@@ -9,6 +9,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { Alert, AlertDescription } from "@/shared/ui/alert";
+import { Loader } from "@/shared/ui/loader";
 import {
   useComposioCatalog,
   useComposioConnections,
@@ -75,17 +76,7 @@ export function ComposioIntegrations({
   );
 
   if (catalog.isLoading || connections.isLoading) {
-    return (
-      <div className="grid grid-cols-1 gap-px overflow-hidden rounded-xl border border-border/70 bg-border/70 sm:grid-cols-2 lg:grid-cols-3">
-        {Array.from({ length: 6 }).map((_, index) => (
-          <div key={index} className="h-36 animate-pulse bg-card p-4">
-            <div className="h-9 w-9 rounded-lg bg-muted" />
-            <div className="mt-4 h-3 w-28 rounded bg-muted" />
-            <div className="mt-2 h-3 w-40 rounded bg-muted/70" />
-          </div>
-        ))}
-      </div>
-    );
+    return <Loader />;
   }
   if (catalog.error || connections.error) {
     return (
