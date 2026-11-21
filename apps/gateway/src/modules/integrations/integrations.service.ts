@@ -23,24 +23,14 @@ import {
   composioExecutionError,
   safeIntegrationError,
 } from "./integrations.utils";
-import { CatalogToolkit, catalogToolFromComposio } from "./integrations.policy";
 import {
+  CatalogToolkit,
+  catalogToolFromComposio,
   buildSessionPolicy,
   BuiltSessionPolicy,
   canReuseSession,
   classifyMetaExecution,
-  failedMutationOutcome,
-  findDependencyPlaceholder,
-  mutationExecutionIdentity,
-} from "./session-policy";
-import {
-  COMPOSIO_GET_TOOL_SCHEMAS,
-  COMPOSIO_SEARCH_TOOLS,
-  extractSessionToolGrounding,
-  sessionSchemaGrounding,
-  sessionMetaPhase,
-  validateSessionMetaCall,
-} from "./session-protocol";
+} from "./integrations.policy";
 
 const SESSION_TTL_MS = Math.max(
   60_000,
@@ -162,6 +152,82 @@ function executionResult(result: {
   };
 }
 
+/**
+ * Builds an idempotency identity from the underlying mutations rather than
+ * Composio's workflow bookkeeping fields (session_id/current_step). This
+ * blocks semantically identical retries while allowing a corrected dependency
+ * ID or other real argument change to proceed.
+ */
+export function mutationExecutionIdentity(
+  args: Record<string, unknown>,
+  riskByTool: Map<string, IntegrationToolRisk>,
+): unknown {
+  if (!Array.isArray(args.tools)) return args;
+  return args.tools
+    .filter(
+      (value): value is Record<string, unknown> =>
+        Boolean(value) && typeof value === "object" && !Array.isArray(value),
+    )
+    .map((entry) => {
+      const toolSlug = entry.toolSlug ?? entry.tool_slug ?? entry.slug;
+      return {
+        toolSlug,
+        arguments: entry.arguments ?? {},
+        ...(entry.account !== undefined ? { account: entry.account } : {}),
+      };
+    })
+    .filter(
+      (entry) =>
+        typeof entry.toolSlug === "string" &&
+        riskByTool.get(entry.toolSlug) !== "read",
+    );
+}
+
+/**
+ * A failed parallel batch is safely retryable only when every mutating entry
+ * is explicitly reported as unsuccessful. Any successful or unknown mutation
+ * makes the overall outcome uncertain and therefore non-replayable.
+ */
+export function failedMutationOutcome(input: {
+  data: unknown;
+  toolSlugs: string[];
+  riskByTool: Map<string, IntegrationToolRisk>;
+}): "failed" | "uncertain" {
+  const mutatingSlugs = input.toolSlugs.filter(
+    (slug) => input.riskByTool.get(slug) !== "read",
+  );
+  if (mutatingSlugs.length === 0) return "failed";
+  if (
+    !input.data ||
+    typeof input.data !== "object" ||
+    Array.isArray(input.data)
+  )
+    return "uncertain";
+  const results = (input.data as Record<string, unknown>).results;
+  if (!Array.isArray(results)) return "uncertain";
+
+  for (const slug of mutatingSlugs) {
+    const entries = results.filter((entry) => {
+      if (!entry || typeof entry !== "object" || Array.isArray(entry))
+        return false;
+      const record = entry as Record<string, unknown>;
+      return (record.tool_slug ?? record.toolSlug ?? record.slug) === slug;
+    });
+    if (entries.length === 0) return "uncertain";
+    for (const entry of entries) {
+      const record = entry as Record<string, unknown>;
+      const response =
+        record.response &&
+        typeof record.response === "object" &&
+        !Array.isArray(record.response)
+          ? (record.response as Record<string, unknown>)
+          : undefined;
+      if (response?.successful !== false) return "uncertain";
+    }
+  }
+  return "failed";
+}
+
 export class IntegrationsService {
   private async resolvedPolicy(
     organizationId: string,
@@ -277,7 +343,7 @@ export class IntegrationsService {
       conversationId,
       status: "active",
     })
-      .select("+composioSessionId +toolSchemas")
+      .select("+composioSessionId")
       .sort({ updatedAt: -1 });
     let tools: NativeSessionTool[];
 
@@ -317,8 +383,6 @@ export class IntegrationsService {
           composioSessionId: created.sessionId,
           policyHash: policy.hash,
           allowedMetaTools: tools.map((tool) => tool.name),
-          discoveredToolSlugs: [],
-          toolSchemas: {},
           status: "active",
           executionCount: 0,
           expiresAt: new Date(Date.now() + SESSION_TTL_MS),
@@ -336,7 +400,7 @@ export class IntegrationsService {
           policyHash: policy.hash,
           expiresAt: { $gt: now },
         })
-          .select("+composioSessionId +toolSchemas")
+          .select("+composioSessionId")
           .sort({ updatedAt: -1 });
         if (!stored) {
           throw new AppError(
@@ -380,10 +444,6 @@ export class IntegrationsService {
       message: "Native Composio session meta-tools are ready",
       sessionId: stored._id.toString(),
       tools,
-      grounding: sessionSchemaGrounding({
-        discoveredToolSlugs: stored.discoveredToolSlugs ?? [],
-        toolSchemas: stored.toolSchemas ?? {},
-      }),
     };
   }
 
@@ -398,7 +458,7 @@ export class IntegrationsService {
       conversationId,
       status: "active",
       expiresAt: { $gt: new Date() },
-    }).select("+composioSessionId +toolSchemas");
+    }).select("+composioSessionId");
     if (!session) {
       throw new AppError("Integration session is missing or expired", 409);
     }
@@ -531,31 +591,6 @@ export class IntegrationsService {
     }
 
     const canonical = canonicalizeArguments(input.arguments);
-    const protocolError = validateSessionMetaCall({
-      metaToolSlug: input.toolName,
-      args: canonical.arguments,
-      allowedMetaTools: session.allowedMetaTools,
-      discoveredToolSlugs: session.discoveredToolSlugs ?? [],
-      toolSchemas: session.toolSchemas ?? {},
-      riskByTool: policy.riskByTool,
-    });
-    if (protocolError) {
-      await audit({
-        organizationId,
-        eventType: "tool_rejected",
-        toolSlug: input.toolName,
-        success: false,
-        metadata: {
-          code: protocolError.code,
-          argumentHash: canonical.hash,
-        },
-      });
-      throw new AppError(
-        protocolError.message,
-        protocolError.statusCode,
-        protocolError.code,
-      );
-    }
     const classification = classifyMetaExecution({
       metaToolSlug: input.toolName,
       args: canonical.arguments,
@@ -568,20 +603,7 @@ export class IntegrationsService {
       input.toolName === "COMPOSIO_MULTI_EXECUTE_TOOL" &&
       classification.toolSlugs.length === 0
     ) {
-      throw new AppError(
-        "Composio multi-execute did not contain any recognizable tool slugs",
-        400,
-      );
-    }
-    if (input.toolName === "COMPOSIO_MULTI_EXECUTE_TOOL") {
-      const placeholder = findDependencyPlaceholder(canonical.arguments);
-      if (placeholder) {
-        throw new AppError(
-          `Invalid dependency placeholder "${placeholder}". COMPOSIO_MULTI_EXECUTE_TOOL runs entries in parallel. Execute only the prerequisite read tool now, then make a separate meta-tool call using the literal ID or URL returned by that read.`,
-          400,
-          "DEPENDENT_TOOL_BATCH_NOT_ALLOWED",
-        );
-      }
+      throw new AppError("Integration action has no tool slugs", 400);
     }
     const batchToolSlugs = classification.toolSlugs;
     const mutating = classification.mutating;
@@ -683,7 +705,6 @@ export class IntegrationsService {
       );
       const normalized: Record<string, unknown> = {
         ...executionResult(result),
-        phase: sessionMetaPhase(input.toolName),
         mutating,
         toolSlugs: batchToolSlugs,
       };
@@ -702,29 +723,6 @@ export class IntegrationsService {
       execution.error =
         typeof normalized.error === "string" ? normalized.error : null;
       execution.providerLogId = result.logId || null;
-      if (
-        result.resultType === "completed" &&
-        (input.toolName === COMPOSIO_SEARCH_TOOLS ||
-          input.toolName === COMPOSIO_GET_TOOL_SCHEMAS)
-      ) {
-        const grounding = extractSessionToolGrounding(result.data);
-        const authorizedSlugs = grounding.discoveredToolSlugs.filter((slug) =>
-          policy.riskByTool.has(slug),
-        );
-        session.discoveredToolSlugs = [
-          ...new Set([
-            ...(session.discoveredToolSlugs ?? []),
-            ...authorizedSlugs,
-          ]),
-        ].sort();
-        const schemas = { ...(session.toolSchemas ?? {}) };
-        for (const [slug, schema] of Object.entries(grounding.toolSchemas)) {
-          if (policy.riskByTool.has(slug)) schemas[slug] = schema;
-        }
-        session.toolSchemas = schemas;
-        session.markModified("toolSchemas");
-        await session.save();
-      }
       await execution.save();
       await audit({
         organizationId,

@@ -3,10 +3,11 @@ import {
   buildSessionPolicy,
   canReuseSession,
   classifyMetaExecution,
+} from "@modules/integrations/integrations.policy";
+import {
   failedMutationOutcome,
-  findDependencyPlaceholder,
   mutationExecutionIdentity,
-} from "@modules/integrations/session-policy";
+} from "@modules/integrations/integrations.service";
 import {
   catalogToolFromComposio,
   riskFromComposioTags,
@@ -16,12 +17,6 @@ import {
   boundedResult,
   composioExecutionError,
 } from "@modules/integrations/integrations.utils";
-import {
-  extractSessionToolGrounding,
-  sessionSchemaGrounding,
-  sessionMetaPhase,
-  validateSessionMetaCall,
-} from "@modules/integrations/session-protocol";
 
 describe("Composio session policy", () => {
   it("builds a cross-integration session with pinned tenant accounts", () => {
@@ -175,33 +170,6 @@ describe("Composio session policy", () => {
     expect(first).toEqual(retry);
   });
 
-  it("rejects symbolic dependencies inside parallel multi-execute input", () => {
-    expect(
-      findDependencyPlaceholder({
-        tools: [
-          { tool_slug: "NOTION_SEARCH", arguments: { query: "" } },
-          {
-            tool_slug: "NOTION_CREATE_PAGE",
-            arguments: { parent_id: "PARENT_ID_FROM_FETCH", title: "Test" },
-          },
-        ],
-      }),
-    ).toBe("PARENT_ID_FROM_FETCH");
-    expect(
-      findDependencyPlaceholder({
-        tools: [
-          {
-            tool_slug: "NOTION_CREATE_PAGE",
-            arguments: {
-              parent_id: "41544a29-bca6-8157-983e-ea8c830ba5f2",
-              title: "Test",
-            },
-          },
-        ],
-      }),
-    ).toBeNull();
-  });
-
   it("marks partial or unknown mutation failures as non-replayable", () => {
     const risks = new Map([
       ["APP_CREATE_RECORD", "write"],
@@ -268,191 +236,6 @@ describe("Composio execution errors", () => {
         },
       }),
     ).toBe("APP_CREATE_RECORD: Destination ID is not accessible");
-  });
-});
-
-describe("native Composio meta-tool protocol", () => {
-  const risks = new Map([
-    ["GOOGLEDRIVE_CREATE_FOLDER", "write"],
-    ["SLACK_SEND_MESSAGE", "write"],
-    ["NOTION_SEARCH_NOTION_PAGE", "read"],
-  ] as const);
-  const allowedMetaTools = [
-    "COMPOSIO_SEARCH_TOOLS",
-    "COMPOSIO_GET_TOOL_SCHEMAS",
-    "COMPOSIO_MULTI_EXECUTE_TOOL",
-  ];
-
-  it("classifies discovery, schema, and execution failures separately", () => {
-    expect(sessionMetaPhase("COMPOSIO_SEARCH_TOOLS")).toBe("discovery");
-    expect(sessionMetaPhase("COMPOSIO_GET_TOOL_SCHEMAS")).toBe("schema");
-    expect(sessionMetaPhase("COMPOSIO_MULTI_EXECUTE_TOOL")).toBe("execution");
-  });
-
-  it("rejects nested meta-tools and invented application slugs actionably", () => {
-    expect(
-      validateSessionMetaCall({
-        metaToolSlug: "COMPOSIO_MULTI_EXECUTE_TOOL",
-        args: {
-          tools: [
-            {
-              tool_slug: "COMPOSIO_GET_TOOL_SCHEMAS",
-              arguments: { tool_slugs: ["DRIVE_CREATE_FOLDER"] },
-            },
-          ],
-        },
-        allowedMetaTools,
-        discoveredToolSlugs: ["GOOGLEDRIVE_CREATE_FOLDER"],
-        toolSchemas: {},
-        riskByTool: risks,
-      }),
-    ).toMatchObject({ code: "NESTED_COMPOSIO_META_TOOL", statusCode: 400 });
-    expect(
-      validateSessionMetaCall({
-        metaToolSlug: "COMPOSIO_MULTI_EXECUTE_TOOL",
-        args: {
-          tools: [{ tool_slug: "DRIVE_CREATE_FOLDER", arguments: {} }],
-        },
-        allowedMetaTools,
-        discoveredToolSlugs: ["GOOGLEDRIVE_CREATE_FOLDER"],
-        toolSchemas: {},
-        riskByTool: risks,
-      }),
-    ).toMatchObject({
-      code: "INTEGRATION_TOOL_NOT_AUTHORIZED",
-      statusCode: 403,
-    });
-  });
-
-  it("grounds discovery, direct schema retrieval, and execution across apps", () => {
-    const discovery = extractSessionToolGrounding({
-      results: [
-        {
-          primary_tool_slugs: ["GOOGLEDRIVE_CREATE_FOLDER"],
-          related_tool_slugs: ["SLACK_SEND_MESSAGE"],
-        },
-      ],
-      tool_schemas: {
-        GOOGLEDRIVE_CREATE_FOLDER: {
-          tool_slug: "GOOGLEDRIVE_CREATE_FOLDER",
-          hasFullSchema: false,
-          schemaRef: { tool: "COMPOSIO_GET_TOOL_SCHEMAS" },
-        },
-        SLACK_SEND_MESSAGE: {
-          tool_slug: "SLACK_SEND_MESSAGE",
-          hasFullSchema: true,
-          input_schema: {
-            type: "object",
-            required: ["channel", "text"],
-            properties: {
-              channel: { type: "string" },
-              text: { type: "string" },
-            },
-          },
-        },
-      },
-    });
-    expect(discovery.discoveredToolSlugs).toEqual([
-      "GOOGLEDRIVE_CREATE_FOLDER",
-      "SLACK_SEND_MESSAGE",
-    ]);
-    expect(discovery.toolSchemas).toHaveProperty("SLACK_SEND_MESSAGE");
-    expect(discovery.toolSchemas).not.toHaveProperty(
-      "GOOGLEDRIVE_CREATE_FOLDER",
-    );
-    expect(
-      validateSessionMetaCall({
-        metaToolSlug: "COMPOSIO_GET_TOOL_SCHEMAS",
-        args: { tool_slugs: ["GOOGLEDRIVE_CREATE_FOLDER"] },
-        allowedMetaTools,
-        discoveredToolSlugs: discovery.discoveredToolSlugs,
-        toolSchemas: discovery.toolSchemas,
-        riskByTool: risks,
-      }),
-    ).toBeNull();
-
-    const schemaResult = extractSessionToolGrounding({
-      tool_schemas: {
-        GOOGLEDRIVE_CREATE_FOLDER: {
-          tool_slug: "GOOGLEDRIVE_CREATE_FOLDER",
-          hasFullSchema: true,
-          input_schema: {
-            type: "object",
-            required: ["name"],
-            additionalProperties: false,
-            properties: { name: { type: "string" } },
-          },
-        },
-      },
-    });
-    const schemas = {
-      ...discovery.toolSchemas,
-      ...schemaResult.toolSchemas,
-    };
-    expect(
-      validateSessionMetaCall({
-        metaToolSlug: "COMPOSIO_MULTI_EXECUTE_TOOL",
-        args: {
-          tools: [
-            {
-              tool_slug: "GOOGLEDRIVE_CREATE_FOLDER",
-              arguments: { name: "Project" },
-            },
-            {
-              tool_slug: "SLACK_SEND_MESSAGE",
-              arguments: { channel: "C123", text: "Created" },
-            },
-          ],
-        },
-        allowedMetaTools,
-        discoveredToolSlugs: discovery.discoveredToolSlugs,
-        toolSchemas: schemas,
-        riskByTool: risks,
-      }),
-    ).toBeNull();
-  });
-
-  it("reports only actually persisted full schemas as reusable", () => {
-    expect(
-      sessionSchemaGrounding({
-        discoveredToolSlugs: ["APP_PARTIAL", "APP_READY", "APP_READY"],
-        toolSchemas: {
-          APP_READY: { type: "object", properties: {} },
-        },
-      }),
-    ).toEqual({
-      discoveredToolSlugs: ["APP_PARTIAL", "APP_READY"],
-      loadedSchemaSlugs: ["APP_READY"],
-    });
-  });
-
-  it("rejects arguments outside the discovered Composio schema", () => {
-    expect(
-      validateSessionMetaCall({
-        metaToolSlug: "COMPOSIO_MULTI_EXECUTE_TOOL",
-        args: {
-          tools: [
-            {
-              tool_slug: "SLACK_SEND_MESSAGE",
-              arguments: { channel: "C123" },
-            },
-          ],
-        },
-        allowedMetaTools,
-        discoveredToolSlugs: ["SLACK_SEND_MESSAGE"],
-        toolSchemas: {
-          SLACK_SEND_MESSAGE: {
-            type: "object",
-            required: ["channel", "text"],
-            properties: {
-              channel: { type: "string" },
-              text: { type: "string" },
-            },
-          },
-        },
-        riskByTool: risks,
-      }),
-    ).toMatchObject({ code: "APPLICATION_TOOL_SCHEMA_VALIDATION_FAILED" });
   });
 });
 

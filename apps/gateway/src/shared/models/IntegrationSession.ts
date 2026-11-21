@@ -9,8 +9,6 @@ export interface IIntegrationSession extends Document {
   composioSessionId: string;
   policyHash: string;
   allowedMetaTools: string[];
-  discoveredToolSlugs: string[];
-  toolSchemas: Record<string, Record<string, unknown>>;
   status: IntegrationSessionStatus;
   executionCount: number;
   expiresAt: Date;
@@ -44,17 +42,6 @@ const integrationSessionSchema = new Schema<IIntegrationSession>(
       type: [{ type: String, maxlength: 160 }],
       required: true,
       default: [],
-    },
-    discoveredToolSlugs: {
-      type: [{ type: String, maxlength: 160 }],
-      required: true,
-      default: [],
-    },
-    toolSchemas: {
-      type: Schema.Types.Mixed,
-      required: true,
-      default: {},
-      select: false,
     },
     status: {
       type: String,
