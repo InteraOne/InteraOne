@@ -25,4 +25,11 @@ describe("custom action schema validation", () => {
     expect(() => validateActionSchema({ ...schema, allOf: [] })).toThrow(/Unsupported inputSchema keyword/);
     expect(() => validateActionSchema({ type: "string" })).toThrow(/root type must be object/);
   });
+
+  it("rejects arrays without an item schema", () => {
+    expect(() => validateActionSchema({
+      type: "object",
+      properties: { values: { type: "array" } },
+    })).toThrow(/require items/);
+  });
 });

@@ -34,6 +34,9 @@ export function validateActionSchema(schema: unknown, depth = 0): asserts schema
     if (value.type !== "array") throw new AppError("items is only valid for array schemas", 400);
     validateActionSchema(value.items, depth + 1);
   }
+  if (value.type === "array" && value.items === undefined) {
+    throw new AppError("Array input schemas require items", 400);
+  }
   if (value.required !== undefined && (!Array.isArray(value.required) || value.required.some((item: unknown) => typeof item !== "string"))) {
     throw new AppError("inputSchema.required must be an array of property names", 400);
   }

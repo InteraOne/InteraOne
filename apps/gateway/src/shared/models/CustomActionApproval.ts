@@ -17,6 +17,8 @@ export interface ICustomActionApproval extends Document {
   status: CustomActionApprovalStatus;
   expiresAt: Date;
   resolvedAt?: Date;
+  executionState?: "running" | "completed";
+  executionResult?: Record<string, any>;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -33,6 +35,8 @@ const customActionApprovalSchema = new Schema<ICustomActionApproval>(
     status: { type: String, enum: ["pending", "approved", "denied", "expired"], default: "pending", index: true },
     expiresAt: { type: Date, required: true },
     resolvedAt: { type: Date, default: undefined },
+    executionState: { type: String, enum: ["running", "completed"], default: undefined },
+    executionResult: { type: Schema.Types.Mixed, default: undefined },
   },
   { timestamps: true },
 );

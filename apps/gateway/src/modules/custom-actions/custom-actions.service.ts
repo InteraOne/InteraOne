@@ -1,10 +1,10 @@
 import { createHash, randomBytes } from "node:crypto";
-import { Types } from "mongoose";
+import mongoose, { Types } from "mongoose";
 import { AppError } from "@shared/core/errors";
 import { Conversation, CustomAction, CustomActionApproval, IntegrationAuditEvent, Message, ICustomAction } from "@shared/models";
 import { CustomActionIntegration } from "@shared/models/CustomActionIntegration";
 import { parseActionSpec } from "./custom-actions.import";
-import { encryptCredential } from "@shared/security/credential-cipher";
+import { encryptCustomActionCredential } from "@shared/security/credential-cipher";
 import { executeCustomAction } from "./custom-actions.executor";
 import { validateActionInput, validateActionSchema } from "./custom-actions.validation";
 
@@ -70,7 +70,7 @@ function actionUpdate(payload: Payload, existingConfigured = false): Payload {
     result.authentication = {
       ...safeAuth,
       ...(credentials ? {
-        encryptedCredentials: encryptCredential(JSON.stringify(credentials)),
+        encryptedCredentials: encryptCustomActionCredential(JSON.stringify(credentials)),
         credentialHint: credentialHint(credentials),
       } : {}),
       ...(safeAuth.type === "none" ? { encryptedCredentials: undefined, credentialHint: undefined } : {}),
@@ -90,18 +90,19 @@ export class CustomActionsService {
     const { origin, actions, skipped } = parseActionSpec(payload.specification, payload.baseUrl);
     if (!actions.length) return { count: 0, skipped };
     const { authentication } = actionUpdate({ authentication: payload.authentication });
-    const integration = await CustomActionIntegration.create({ organizationId, origin, authentication });
     const suffix = randomBytes(5).toString("hex");
-    await CustomAction.insertMany(actions.map((action) => ({
-      ...action,
-      slug: `${action.slug}_${suffix}`,
-      enabled: false,
-      organizationId,
-      integrationId: integration._id,
-      authentication: { type: "none" },
-      createdBy: userId,
-      updatedBy: userId,
-    })));
+    const session = await mongoose.startSession();
+    try {
+      await session.withTransaction(async () => {
+        const [integration] = await CustomActionIntegration.create([{ organizationId, origin, authentication }], { session });
+        await CustomAction.insertMany(actions.map((action) => ({
+          ...action, slug: `${action.slug}_${suffix}`, enabled: false, organizationId,
+          integrationId: integration._id, authentication: { type: "none" }, createdBy: userId, updatedBy: userId,
+        })), { session });
+      });
+    } finally {
+      await session.endSession();
+    }
     return { count: actions.length, skipped };
   }
 
@@ -168,7 +169,12 @@ export class CustomActionsService {
         _id: String(input.approvalId || ""), organizationId, conversationId,
       });
       if (!approval) throw new AppError("Custom action approval not found", 404);
-      if (approval.status !== "pending") return { status: approval.status, executed: false };
+      if (approval.executionState === "completed" && approval.executionResult) {
+        return { status: approval.executionResult.ok ? "succeeded" : "failed", executed: true, result: approval.executionResult };
+      }
+      if (approval.status !== "pending") return approval.executionState === "running"
+        ? { status: "uncertain", message: "The outcome could not be verified. Do not retry automatically." }
+        : { status: approval.status, executed: false };
       if (approval.expiresAt <= new Date()) {
         return { status: "expired", executed: false };
       }
@@ -189,7 +195,7 @@ export class CustomActionsService {
       const status = input.decision === "deny" ? "denied" : "approved";
       const claim = await CustomActionApproval.updateOne(
         { _id: approval._id, status: "pending", expiresAt: { $gt: new Date() } },
-        { $set: { status, resolvedAt: new Date() } },
+        { $set: { status, resolvedAt: new Date(), ...(status === "approved" ? { executionState: "running" } : {}) } },
       );
       if (!claim.modifiedCount || status === "denied") return { status: claim.modifiedCount ? "denied" : "already_resolved", executed: false };
       const result = await this.run(action, approval.arguments, approval.requesterEmail).catch(() => null);
@@ -197,7 +203,8 @@ export class CustomActionsService {
         await IntegrationAuditEvent.create({ organizationId, eventType: "custom_action_uncertain", toolSlug: action.slug, success: false, metadata: { conversationId, approvalId: approval._id.toString() } });
         return { status: "uncertain", message: "The outcome could not be verified. Do not retry automatically." };
       }
-      await IntegrationAuditEvent.create({ organizationId, eventType: "custom_action_executed", toolSlug: action.slug, success: result.ok, metadata: { conversationId, approvalId: approval._id.toString(), status: result.status } });
+      await CustomActionApproval.updateOne({ _id: approval._id }, { $set: { executionState: "completed", executionResult: result } });
+      await IntegrationAuditEvent.create({ organizationId, eventType: "custom_action_executed", toolSlug: action.slug, success: result.ok, metadata: { conversationId, approvalId: approval._id.toString(), status: result.status } }).catch(() => undefined);
       return { status: result.ok ? "succeeded" : "failed", executed: true, result };
     }
 
@@ -208,7 +215,7 @@ export class CustomActionsService {
     const args = runtimeArguments(action.inputSchema, input, organizationId, conversationId);
     validateActionInput(action.inputSchema, args);
     if (needsConfirmation(action)) {
-      const fingerprint = JSON.stringify([organizationId, conversationId, action.id, stableInput(args)]);
+      const fingerprint = JSON.stringify([organizationId, conversationId, action.id, action.updatedAt.toISOString(), stableInput(args)]);
       const id = new Types.ObjectId(createHash("sha256").update(fingerprint).digest("hex").slice(0, 24));
       const approval = await CustomActionApproval.findOneAndUpdate({ _id: id }, {
         $setOnInsert: {
@@ -310,7 +317,8 @@ export class CustomActionsService {
     const action = await CustomAction.findOne({ _id: actionId, organizationId }).select("+authentication.encryptedCredentials");
     if (!action) throw new AppError("Custom action not found", 404);
     try {
-      const result = await this.run(action, input, action.audience === "verified" ? requesterEmail : undefined);
+      const args = runtimeArguments(action.inputSchema, input, organizationId, "test");
+      const result = await this.run(action, args, action.audience === "verified" ? requesterEmail : undefined);
       await IntegrationAuditEvent.create({ organizationId, actorUserId: userId, eventType: "custom_action_tested", toolSlug: action.slug, success: result.ok, metadata: { actionId, status: result.status, durationMs: result.durationMs } });
       return result;
     } catch (error) {

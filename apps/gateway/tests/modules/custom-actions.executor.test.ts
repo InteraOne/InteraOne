@@ -10,7 +10,10 @@ describe("custom action destination protection", () => {
     "169.254.169.254",
     "::1",
     "fd00::1",
+    "fea0::1",
+    "febf:ffff::1",
     "::ffff:127.0.0.1",
+    "::ffff:7f00:1",
   ])("blocks private destination %s", (address) => {
     expect(isPrivateIp(address)).toBe(true);
   });

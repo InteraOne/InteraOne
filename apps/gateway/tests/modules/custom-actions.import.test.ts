@@ -108,4 +108,26 @@ components:
       paths,
     }))).toThrow("Import supports up to 1000 operations per specification");
   });
+
+  it("skips dictionary request bodies that runtime validation cannot represent", () => {
+    const result = parseActionSpec(JSON.stringify({
+      openapi: "3.0.3",
+      servers: [{ url: "https://example.com" }],
+      paths: { "/labels": { post: { requestBody: { content: { "application/json": { schema: {
+        type: "object", additionalProperties: { type: "string" },
+      } } } } } } },
+    }));
+    expect(result.actions).toEqual([]);
+    expect(result.skipped[0]).toMatch(/Dictionary inputs are unsupported/);
+  });
+
+  it("skips an overlong operation URL while retaining valid siblings", () => {
+    const result = parseActionSpec(JSON.stringify({
+      openapi: "3.0.3",
+      servers: [{ url: "https://example.com" }],
+      paths: { ["/" + "x".repeat(2050)]: { get: {} }, "/valid": { get: {} } },
+    }));
+    expect(result.actions.map((action) => action.request.url)).toEqual(["https://example.com/valid"]);
+    expect(result.skipped[0]).toMatch(/URL exceeds 2048/);
+  });
 });

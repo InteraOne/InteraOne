@@ -58,7 +58,10 @@ function wrapTool(nativeTool: NativeCustomActionTool, organizationId: string, co
       } catch (error: any) {
         if (error instanceof ToolExecutionError) throw error;
         const message = error?.response?.data?.message || error?.message || "Custom action execution failed";
-        throw new ToolExecutionError(message, { status: "failed", executed: false, code: error?.response?.data?.code || "CUSTOM_ACTION_REJECTED", error: message });
+        const confirmedRejected = error?.response?.status >= 400 && error?.response?.status < 500;
+        throw new ToolExecutionError(message, confirmedRejected
+          ? { status: "failed", executed: false, code: error?.response?.data?.code || "CUSTOM_ACTION_REJECTED", error: message }
+          : { status: "uncertain", code: error?.response?.data?.code || "CUSTOM_ACTION_OUTCOME_UNKNOWN", error: message });
       }
     },
   };

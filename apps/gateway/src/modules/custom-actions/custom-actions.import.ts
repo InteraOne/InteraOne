@@ -41,6 +41,9 @@ export function parseActionSpec(source: string, baseUrl?: string) {
     if (++schemaNodes > 4000) throw new Error("Specification exceeds the input schema size limit");
     if (depth > 7) throw new Error("Input schema is too deeply nested");
     const schema = resolve(raw);
+    if (schema.additionalProperties && schema.additionalProperties !== false) {
+      throw new Error("Dictionary inputs are unsupported");
+    }
     if (schema.oneOf || schema.anyOf || schema.allOf || schema.not || schema.format === "binary") {
       throw new Error("Composed or binary inputs are unsupported");
     }
@@ -126,11 +129,13 @@ export function parseActionSpec(source: string, baseUrl?: string) {
         let slug = prefix;
         for (let suffix = 2; slugs.has(slug); suffix++) slug = `${prefix}_${suffix}`;
         slugs.add(slug);
+        const actionUrl = base.href.replace(/\/$/, "") + urlPath;
+        if (actionUrl.length > 2048) throw new Error("Action URL exceeds 2048 characters");
         actions.push({
           name: String(operation.summary || operation.operationId || fallback).slice(0, 100),
           description: String(operation.description || operation.summary || fallback).slice(0, 1000),
           slug,
-          request: { method: method.toUpperCase(), url: base.href.replace(/\/$/, "") + urlPath, query, headers, bodyTemplate },
+          request: { method: method.toUpperCase(), url: actionUrl, query, headers, bodyTemplate },
           inputSchema: schema,
           confirmation: { mode: method === "get" ? "never" : "always" },
         });

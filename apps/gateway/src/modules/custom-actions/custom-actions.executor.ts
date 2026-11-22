@@ -1,19 +1,38 @@
 import { lookup } from "dns/promises";
 import https from "https";
-import { isIP } from "net";
+import { BlockList, isIP } from "net";
 import { AppError } from "@shared/core/errors";
-import { decryptCredential } from "@shared/security/credential-cipher";
+import { decryptCustomActionCredential } from "@shared/security/credential-cipher";
 import { ICustomAction } from "@shared/models";
 import { validateActionInput } from "./custom-actions.validation";
 
 const BLOCKED_HEADERS = new Set(["authorization", "host", "connection", "content-length", "transfer-encoding", "upgrade", "proxy-authorization"]);
 
-export function isPrivateIp(ip: string): boolean {
+function isPrivateIpv4(ip: string): boolean {
   const normalized = ip.toLowerCase().replace(/^::ffff:/, "");
-  if (normalized === "::1" || normalized === "::" || normalized.startsWith("fe80:") || normalized.startsWith("fc") || normalized.startsWith("fd")) return true;
   if (!/^\d+\.\d+\.\d+\.\d+$/.test(normalized)) return false;
   const [a, b] = normalized.split(".").map(Number);
   return a === 0 || a === 10 || a === 127 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || a >= 224;
+}
+
+const blockedIpv6 = new BlockList();
+blockedIpv6.addSubnet("::", 128, "ipv6");
+blockedIpv6.addSubnet("::1", 128, "ipv6");
+blockedIpv6.addSubnet("fc00::", 7, "ipv6");
+blockedIpv6.addSubnet("fe80::", 10, "ipv6");
+blockedIpv6.addSubnet("::ffff:0:0", 104, "ipv6");
+blockedIpv6.addSubnet("::ffff:a00:0", 104, "ipv6");
+blockedIpv6.addSubnet("::ffff:7f00:0", 104, "ipv6");
+blockedIpv6.addSubnet("::ffff:a9fe:0", 112, "ipv6");
+blockedIpv6.addSubnet("::ffff:ac10:0", 108, "ipv6");
+blockedIpv6.addSubnet("::ffff:c0a8:0", 112, "ipv6");
+blockedIpv6.addSubnet("::ffff:e000:0", 99, "ipv6");
+export function isPrivateIp(ip: string): boolean {
+  const family = isIP(ip);
+  if (family === 4) return isPrivateIpv4(ip);
+  if (family !== 6) return true;
+  const mapped = ip.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/i)?.[1];
+  return mapped ? isPrivateIpv4(mapped) : blockedIpv6.check(ip, "ipv6");
 }
 
 async function resolvePublicAddress(hostname: string): Promise<{ address: string; family: number }> {
@@ -53,7 +72,7 @@ function renderJson(template: unknown, input: Record<string, unknown>): unknown 
 function parseCredentials(action: ICustomAction): Record<string, string> {
   const encrypted = action.authentication.encryptedCredentials;
   if (!encrypted) return {};
-  return JSON.parse(decryptCredential(encrypted));
+  return JSON.parse(decryptCustomActionCredential(encrypted));
 }
 
 export interface CustomActionResult {
@@ -71,6 +90,7 @@ function safeResponseHeaders(headers: Record<string, string | string[] | undefin
 }
 
 export async function executeCustomAction(action: ICustomAction, input: Record<string, unknown>, credentialOrigin?: string, requesterEmail?: string): Promise<CustomActionResult> {
+  const startedAt = Date.now();
   validateActionInput(action.inputSchema, input);
   const authority = action.request.url.match(/^https:\/\/([^/?#]+)/i)?.[1];
   if (!authority || /[{}@\\]/.test(authority)) throw new AppError("Action URLs require a fixed HTTPS hostname", 400);
@@ -78,6 +98,8 @@ export async function executeCustomAction(action: ICustomAction, input: Record<s
   if (url.protocol !== "https:" || (url.port && url.port !== "443")) throw new AppError("Custom actions must use HTTPS on port 443", 400);
   if (credentialOrigin && url.origin !== credentialOrigin) throw new AppError("Endpoint must match the integration origin", 400);
   const resolved = await resolvePublicAddress(url.hostname);
+  const remainingMs = action.execution.timeoutMs - (Date.now() - startedAt);
+  if (remainingMs <= 0) throw new AppError("Custom action timed out", 502, "CUSTOM_ACTION_REQUEST_FAILED");
   const isOmitted = (template: string) => {
     const exact = template.match(/^\{\{([A-Za-z_]\w*)\}\}$/);
     return exact && !Object.hasOwn(input, exact[1]);
@@ -110,12 +132,18 @@ export async function executeCustomAction(action: ICustomAction, input: Record<s
     headers["content-type"] = "application/json";
   }
 
-  const startedAt = Date.now();
   return new Promise((resolve, reject) => {
+    let settled = false;
+    const finish = <T>(callback: (value: T) => void, value: T) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(deadline);
+      callback(value);
+    };
     const request = https.request(url, {
       method: action.request.method,
       headers,
-      timeout: action.execution.timeoutMs,
+      timeout: remainingMs,
       lookup: (_hostname, options, callback) => {
         if (options.all) {
           callback(null, [{ address: resolved.address, family: resolved.family }]);
@@ -137,11 +165,13 @@ export async function executeCustomAction(action: ICustomAction, input: Record<s
         const text = Buffer.concat(chunks).toString("utf8");
         let parsed: unknown = text;
         try { parsed = text ? JSON.parse(text) : null; } catch {}
-        resolve({ status: response.statusCode || 0, ok: Boolean(response.statusCode && response.statusCode >= 200 && response.statusCode < 300), durationMs: Date.now() - startedAt, headers: safeResponseHeaders(response.headers), body: parsed, truncated });
+        finish(resolve, { status: response.statusCode || 0, ok: Boolean(response.statusCode && response.statusCode >= 200 && response.statusCode < 300), durationMs: Date.now() - startedAt, headers: safeResponseHeaders(response.headers), body: parsed, truncated });
       });
+      response.on("error", (error) => finish(reject, new AppError(error.message, 502, "CUSTOM_ACTION_REQUEST_FAILED")));
     });
+    const deadline = setTimeout(() => request.destroy(new Error("Custom action timed out")), remainingMs);
     request.on("timeout", () => request.destroy(new Error("Custom action timed out")));
-    request.on("error", (error) => reject(new AppError(error.message, 502, "CUSTOM_ACTION_REQUEST_FAILED")));
+    request.on("error", (error) => finish(reject, new AppError(error.message, 502, "CUSTOM_ACTION_REQUEST_FAILED")));
     if (body) request.write(body);
     request.end();
   });
