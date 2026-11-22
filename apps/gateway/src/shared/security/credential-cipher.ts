@@ -9,10 +9,11 @@ import config from "@shared/infra/config";
 const ALGORITHM = "aes-256-gcm";
 
 function getKey(): Buffer {
-  const configured = config.leadSources.encryptionKey;
+  const configured =
+    config.customActions?.encryptionKey || config.leadSources.encryptionKey;
   if (!configured) {
     throw new Error(
-      "LEAD_SOURCE_ENCRYPTION_KEY is required to store integration credentials",
+      "CUSTOM_ACTION_ENCRYPTION_KEY is required to store integration credentials",
     );
   }
   return createHash("sha256").update(configured, "utf8").digest();

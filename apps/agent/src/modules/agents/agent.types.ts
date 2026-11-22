@@ -30,7 +30,7 @@ export interface Tool {
   readonly description: string;
 
   /** Origin used for orchestration and result verification. */
-  readonly source?: "builtin" | "composio";
+  readonly source?: "builtin" | "composio" | "custom_action";
 
   readonly parameters: Record<string, ToolParameterSchema>;
   /** Native JSON Schema. Prefer this over `parameters` when available. */

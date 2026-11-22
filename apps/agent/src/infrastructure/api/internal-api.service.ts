@@ -23,6 +23,21 @@ export interface IngestionStatusUpdate {
 }
 
 export const InternalApiService = {
+  async getCustomActionTools(organizationId: string, conversationId: string): Promise<any> {
+    const { data } = await internalApi.post("/actions/ai/tools", { organizationId, conversationId });
+    return data?.data;
+  },
+
+  async executeCustomActionTool(payload: {
+    organizationId: string;
+    conversationId: string;
+    toolName: string;
+    arguments: Record<string, unknown>;
+  }): Promise<any> {
+    const { data } = await internalApi.post("/actions/ai/execute", payload);
+    return data?.data ?? data;
+  },
+
   async openComposioSession(
     organizationId: string,
     conversationId: string,

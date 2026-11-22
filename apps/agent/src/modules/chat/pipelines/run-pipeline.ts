@@ -19,6 +19,8 @@ import {
   isComposioSessionTool,
 } from "../../agents/tools/composio-session.tools";
 import { composioSessionInstruction } from "../services/system-prompt/sections/composio";
+import { customActionsInstruction } from "../services/system-prompt/sections/customActions";
+import { isCustomActionTool } from "../../agents/tools/custom-action.tools";
 import {
   broaderKnowledgeQuery,
   containsFabricatedPlaceholder,
@@ -176,9 +178,13 @@ Do not use model memory for facts. Do not invent names, expansions of acronyms, 
         : [];
 
       const hasConnectedTools = tools.some(isComposioSessionTool);
+      const hasCustomActions = tools.some(isCustomActionTool);
 
       if (hasConnectedTools) {
         messages[0].content += composioSessionInstruction();
+      }
+      if (hasCustomActions) {
+        messages[0].content += customActionsInstruction();
       }
 
       console.time(t("llm"));

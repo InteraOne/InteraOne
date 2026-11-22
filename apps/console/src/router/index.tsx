@@ -31,6 +31,8 @@ import QRScannerLandingPage from "@/domains/widget/pages/qr-scanner-landing-page
 import { ChannelsPage } from "@/domains/channels/pages/channels-page";
 import { IntegrationsPage } from "@/domains/integrations/pages/integrations-page";
 import { ComposioToolkitPage } from "@/domains/integrations/pages/composio-toolkit-page";
+import { CustomActionsPage } from "@/domains/custom-actions/pages/custom-actions-page";
+import { CustomActionEditorPage } from "@/domains/custom-actions/pages/custom-action-editor-page";
 import { EmailChannelSetupPage } from "@/domains/channels/pages/email-channel-setup";
 import { WhatsAppChannelSetupPage } from "@/domains/channels/pages/whatsapp-channel-setup";
 import { TelegramChannelSetupPage } from "@/domains/channels/pages/telegram-channel-setup";
@@ -313,6 +315,30 @@ const router = createBrowserRouter([
         <DashboardLayout>
           <ComposioToolkitPage />
         </DashboardLayout>
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: "/dashboard/custom-actions",
+    element: (
+      <ProtectedRoute requiredRole="admin">
+        <DashboardLayout><CustomActionsPage /></DashboardLayout>
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: "/dashboard/custom-actions/new",
+    element: (
+      <ProtectedRoute requiredRole="admin">
+        <DashboardLayout><CustomActionEditorPage /></DashboardLayout>
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: "/dashboard/custom-actions/:actionId",
+    element: (
+      <ProtectedRoute requiredRole="admin">
+        <DashboardLayout><CustomActionEditorPage /></DashboardLayout>
       </ProtectedRoute>
     ),
   },
