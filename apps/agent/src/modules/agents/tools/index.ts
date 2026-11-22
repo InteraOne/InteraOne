@@ -29,6 +29,7 @@ export function getAllTools(): Tool[] {
 /** Returns dynamically filtered tools based on conversation context/configuration */
 export async function getToolsForContext(
   options: ToolFilterOptions,
+  preloadedCustomActions?: Awaited<ReturnType<typeof getCustomActionTools>>,
 ): Promise<ToolResolution> {
   let tools = [...registry.values()];
 
@@ -49,7 +50,7 @@ export async function getToolsForContext(
     conversationId: options.conversationId,
     channel: options.channel || "widget",
   });
-  const customActions = await getCustomActionTools({
+  const customActions = preloadedCustomActions ?? await getCustomActionTools({
     organizationId: options.organizationId,
     conversationId: options.conversationId,
   });

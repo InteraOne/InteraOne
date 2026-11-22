@@ -8,7 +8,7 @@ import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { Textarea } from "@/shared/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/shared/ui/tabs";
-import { useCustomAction, useSaveCustomAction, useTestCustomAction } from "../hooks/use-custom-actions";
+import { useCustomAction, useCustomActions, useSaveCustomAction, useTestCustomAction } from "../hooks/use-custom-actions";
 import type { CustomActionAuthType, CustomActionMethod, CustomActionPayload } from "../types/types";
 
 const DEFAULT_SCHEMA = { type: "object", properties: {}, required: [] };
@@ -16,9 +16,11 @@ const stringify = (value: unknown) => JSON.stringify(value, null, 2);
 
 interface FormState {
   name: string;
+  category: string;
   slug: string;
   description: string;
   enabled: boolean;
+  audience: "public" | "restricted" | "verified";
   method: CustomActionMethod;
   url: string;
   headers: string;
@@ -40,7 +42,7 @@ interface FormState {
 }
 
 const initialState: FormState = {
-  name: "", slug: "", description: "", enabled: false,
+  name: "", category: "", slug: "", description: "", enabled: false, audience: "restricted",
   method: "POST", url: "", headers: "{}", query: "{}", body: "{}",
   authType: "none", authPlacement: "header", authKeyName: "X-API-Key",
   token: "", username: "", password: "", apiKey: "",
@@ -57,18 +59,21 @@ export function CustomActionEditorPage() {
   const editing = Boolean(actionId);
   const navigate = useNavigate();
   const action = useCustomAction(actionId);
+  const actions = useCustomActions();
   const save = useSaveCustomAction(actionId);
   const test = useTestCustomAction(actionId);
   const [form, setForm] = useState<FormState>(initialState);
   const [hydratedId, setHydratedId] = useState<string>();
   const [error, setError] = useState<string>();
+  const [testEmail, setTestEmail] = useState("");
 
   useEffect(() => {
     if (!action.data || hydratedId === action.data._id) return;
     const value = action.data;
     setForm({
       ...initialState,
-      name: value.name, slug: value.slug, description: value.description, enabled: value.enabled,
+      name: value.name, category: value.category || "", slug: value.slug, description: value.description, enabled: value.enabled,
+      audience: value.audience || "restricted",
       method: value.request.method, url: value.request.url,
       headers: stringify(value.request.headers || {}), query: stringify(value.request.query || {}),
       body: value.request.bodyTemplate === undefined ? "" : stringify(value.request.bodyTemplate),
@@ -109,9 +114,9 @@ export function CustomActionEditorPage() {
       try { bodyTemplate = JSON.parse(form.body); } catch { throw new Error("JSON body template is invalid."); }
     }
     return {
-      name: form.name.trim(), slug: form.slug.trim(), description: form.description.trim(), enabled: form.enabled,
+      name: form.name.trim(), category: form.category.trim() || undefined, slug: form.slug.trim(), description: form.description.trim(), enabled: form.enabled,
       request: { method: form.method, url: form.url.trim(), headers: parseObject("Headers", form.headers) as Record<string, string>, query: parseObject("Query parameters", form.query) as Record<string, string>, ...(bodyTemplate !== undefined ? { bodyTemplate } : {}) },
-      authentication, inputSchema: parseObject("Input schema", form.inputSchema),
+      authentication, audience: form.audience, inputSchema: parseObject("Input schema", form.inputSchema),
       confirmation: { mode: form.confirmation }, execution: { timeoutMs: Number(form.timeoutMs), maxResponseBytes: Number(form.maxResponseBytes) },
     };
   };
@@ -126,11 +131,17 @@ export function CustomActionEditorPage() {
 
   const runTest = async () => {
     setError(undefined);
-    try { await test.mutateAsync(parseObject("Test input", form.testInput)); }
+    if (action.data?.request.method !== "GET" && !window.confirm("Run this live test? It may change data in the target API.")) return;
+    try { await test.mutateAsync({
+      input: parseObject("Test input", form.testInput),
+      requesterEmail: action.data?.audience === "verified" ? testEmail.trim() || undefined : undefined,
+    }); }
     catch (caught) { setError(caught instanceof Error ? caught.message : "Action test failed."); }
   };
 
   if (editing && action.isLoading) return <div className="flex min-h-64 items-center justify-center"><Loader2 className="h-6 w-6 animate-spin" /></div>;
+
+  const categories = Array.from(new Set((actions.data || []).map((item) => item.category?.trim()).filter((value): value is string => Boolean(value)))).sort();
 
   return (
     <form onSubmit={submit} className="mx-auto max-w-7xl space-y-5">
@@ -157,6 +168,7 @@ export function CustomActionEditorPage() {
         <div className="mt-4 rounded-xl border bg-card p-5 shadow-xs sm:p-6">
           <TabsContent value="basics" className="mt-0 space-y-5">
             <div className="grid gap-5 sm:grid-cols-2"><div className="space-y-2"><Label htmlFor="name">Name</Label><Input id="name" value={form.name} required onChange={(event) => { update("name", event.target.value); if (!editing && !form.slug) update("slug", event.target.value.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "")); }} placeholder="Look up an order" /></div><div className="space-y-2"><Label htmlFor="slug">Action slug</Label><Input id="slug" className="font-mono" value={form.slug} required onChange={(event) => update("slug", event.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))} placeholder="lookup_order" /></div></div>
+            <div className="space-y-2"><Label htmlFor="category">Category</Label><Input id="category" list="custom-action-categories" value={form.category} maxLength={80} onChange={(event) => update("category", event.target.value)} placeholder="For example, Orders" /><datalist id="custom-action-categories">{categories.map((category) => <option key={category} value={category} />)}</datalist><p className="text-xs text-muted-foreground">Choose an existing category or type a new one.</p></div>
             <div className="space-y-2"><Label htmlFor="description">Description</Label><Textarea id="description" value={form.description} required onChange={(event) => update("description", event.target.value)} placeholder="Find an order by its public order ID." /></div>
           </TabsContent>
 
@@ -167,22 +179,37 @@ export function CustomActionEditorPage() {
           </TabsContent>
 
           <TabsContent value="authentication" className="mt-0 space-y-5">
+            {action.data?.integrationId ? <p className="text-sm text-muted-foreground">Credentials are shared by actions in this imported integration.</p> : <>
             <div className="space-y-2"><Label>Authentication type</Label><select className="h-9 w-full max-w-sm rounded-md border bg-background px-3 text-sm" value={form.authType} onChange={(event) => update("authType", event.target.value as CustomActionAuthType)}><option value="none">No authentication</option><option value="bearer">Bearer token</option><option value="basic">Basic authentication</option><option value="api_key">API key</option></select></div>
             {form.credentialHint && form.authType !== "none" && <div className="rounded-lg border bg-muted/30 p-3 text-sm">A credential is configured ({form.credentialHint}). Leave the fields blank to keep it.</div>}
             {form.authType === "bearer" && <div className="space-y-2"><Label>Bearer token</Label><Input type="password" value={form.token} onChange={(event) => update("token", event.target.value)} placeholder={form.credentialHint ? "Leave blank to keep existing token" : "Token"} /></div>}
             {form.authType === "basic" && <div className="grid gap-4 sm:grid-cols-2"><div className="space-y-2"><Label>Username</Label><Input value={form.username} onChange={(event) => update("username", event.target.value)} /></div><div className="space-y-2"><Label>Password</Label><Input type="password" value={form.password} onChange={(event) => update("password", event.target.value)} /></div></div>}
             {form.authType === "api_key" && <div className="grid gap-4 sm:grid-cols-3"><div className="space-y-2"><Label>Placement</Label><select className="h-9 w-full rounded-md border bg-background px-3 text-sm" value={form.authPlacement} onChange={(event) => update("authPlacement", event.target.value as "header" | "query")}><option value="header">Header</option><option value="query">Query parameter</option></select></div><div className="space-y-2"><Label>Key name</Label><Input value={form.authKeyName} onChange={(event) => update("authKeyName", event.target.value)} /></div><div className="space-y-2"><Label>API key</Label><Input type="password" value={form.apiKey} onChange={(event) => update("apiKey", event.target.value)} /></div></div>}
+            </>}
           </TabsContent>
 
           <TabsContent value="inputs" className="mt-0"><JsonEditor label="Input schema" value={form.inputSchema} onChange={(value) => update("inputSchema", value)} rows={10} description="Restricted JSON Schema. The root value must be an object." /></TabsContent>
 
           <TabsContent value="safety" className="mt-0 space-y-5">
+            <label className="block space-y-2">
+              <span className="text-sm font-medium">AI availability</span>
+              <select className="block h-9 rounded-md border bg-background px-3 text-sm" value={form.audience} onChange={(event) => update("audience", event.target.value as FormState["audience"])}>
+                <option value="restricted">Console only</option>
+                <option value="public">Public</option>
+                {action.data?.integrationId && <option value="verified">Verified customer</option>}
+              </select>
+              <span className="block text-xs text-muted-foreground">Public actions are available to visitors. For verified customer actions, the backend must authenticate the integration and authorize the record against the X-InteraOne-Verified-Email header.</span>
+            </label>
             <div className="flex items-start gap-3 rounded-lg border border-amber-500/20 bg-amber-500/[0.06] p-4"><ShieldAlert className="mt-0.5 h-5 w-5 text-amber-500" /><div><p className="text-sm font-medium">Execution confirmation</p><p className="mt-1 text-xs text-muted-foreground">Console tests run immediately. Runtime requests can require confirmation before execution.</p></div></div>
             <div className="space-y-2"><Label>Require confirmation</Label><select className="h-9 w-full max-w-sm rounded-md border bg-background px-3 text-sm" value={form.confirmation} onChange={(event) => update("confirmation", event.target.value as "never" | "always")}><option value="never">Never</option><option value="always">Before every execution</option></select></div>
             <div className="grid gap-4 sm:grid-cols-2"><div className="space-y-2"><Label>Timeout (ms)</Label><Input type="number" min={1000} max={15000} value={form.timeoutMs} onChange={(event) => update("timeoutMs", Number(event.target.value))} /></div><div className="space-y-2"><Label>Maximum response bytes</Label><Input type="number" min={1024} max={131072} value={form.maxResponseBytes} onChange={(event) => update("maxResponseBytes", Number(event.target.value))} /></div></div>
           </TabsContent>
 
           <TabsContent value="test" className="mt-0 space-y-5">
+            {action.data?.audience === "verified" && <label className="block space-y-1 text-sm">
+              <span>Test customer email</span>
+              <Input type="email" value={testEmail} onChange={(event) => setTestEmail(event.target.value)} />
+            </label>}
             <JsonEditor label="Test input" value={form.testInput} onChange={(value) => update("testInput", value)} description="Save configuration changes before running a test." />
             <Button type="button" variant="outline" onClick={runTest} disabled={test.isPending || save.isPending}><FlaskConical className="mr-2 h-4 w-4" />{test.isPending ? "Running…" : "Run test"}</Button>
             {test.data && <div className={`rounded-lg border p-4 ${test.data.ok ? "border-emerald-500/30" : "border-destructive/30"}`}><div className="flex flex-wrap gap-3 text-sm"><span className="font-semibold">HTTP {test.data.status}</span><span className="text-muted-foreground">{test.data.durationMs} ms</span>{test.data.truncated && <span className="text-amber-500">Response truncated</span>}</div><pre className="mt-3 max-h-80 overflow-auto rounded-md bg-muted p-3 text-xs">{stringify(test.data.body)}</pre></div>}

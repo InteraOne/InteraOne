@@ -70,17 +70,26 @@ function safeResponseHeaders(headers: Record<string, string | string[] | undefin
   return Object.fromEntries(Object.entries(headers).filter(([key, value]) => allowed.has(key.toLowerCase()) && value !== undefined)) as Record<string, string | string[]>;
 }
 
-export async function executeCustomAction(action: ICustomAction, input: Record<string, unknown>): Promise<CustomActionResult> {
+export async function executeCustomAction(action: ICustomAction, input: Record<string, unknown>, credentialOrigin?: string, requesterEmail?: string): Promise<CustomActionResult> {
   validateActionInput(action.inputSchema, input);
+  const authority = action.request.url.match(/^https:\/\/([^/?#]+)/i)?.[1];
+  if (!authority || /[{}@\\]/.test(authority)) throw new AppError("Action URLs require a fixed HTTPS hostname", 400);
   const url = new URL(renderString(action.request.url, input, true));
   if (url.protocol !== "https:" || (url.port && url.port !== "443")) throw new AppError("Custom actions must use HTTPS on port 443", 400);
+  if (credentialOrigin && url.origin !== credentialOrigin) throw new AppError("Endpoint must match the integration origin", 400);
   const resolved = await resolvePublicAddress(url.hostname);
-  for (const [key, template] of Object.entries(action.request.query || {})) url.searchParams.set(key, renderString(template, input, false));
+  const isOmitted = (template: string) => {
+    const exact = template.match(/^\{\{([A-Za-z_]\w*)\}\}$/);
+    return exact && !Object.hasOwn(input, exact[1]);
+  };
+  for (const [key, template] of Object.entries(action.request.query || {})) {
+    if (!isOmitted(template)) url.searchParams.set(key, renderString(template, input, false));
+  }
 
   const headers: Record<string, string> = { accept: "application/json" };
   for (const [key, template] of Object.entries(action.request.headers || {})) {
     if (BLOCKED_HEADERS.has(key.toLowerCase())) throw new AppError(`Header ${key} is not allowed`, 400);
-    headers[key] = renderString(template, input, false);
+    if (!isOmitted(template)) headers[key] = renderString(template, input, false);
   }
   const credentials = parseCredentials(action);
   if (action.authentication.type === "bearer") headers.authorization = `Bearer ${credentials.token || ""}`;
@@ -91,6 +100,11 @@ export async function executeCustomAction(action: ICustomAction, input: Record<s
     else headers[keyName] = credentials.value || "";
   }
   let body: string | undefined;
+  for (const key of Object.keys(headers)) {
+    if (key.toLowerCase() === "x-interaone-verified-email") delete headers[key];
+  }
+  url.searchParams.delete("X-InteraOne-Verified-Email");
+  if (requesterEmail) headers["x-interaone-verified-email"] = requesterEmail;
   if (action.request.bodyTemplate !== undefined && !["GET", "DELETE"].includes(action.request.method)) {
     body = JSON.stringify(renderJson(action.request.bodyTemplate, input));
     headers["content-type"] = "application/json";

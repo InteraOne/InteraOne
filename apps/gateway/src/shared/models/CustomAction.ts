@@ -7,9 +7,12 @@ export interface ICustomAction extends Document {
   _id: Types.ObjectId;
   organizationId: Types.ObjectId;
   name: string;
+  category?: string;
   slug: string;
   description: string;
   enabled: boolean;
+  audience?: "public" | "restricted" | "verified";
+  integrationId?: Types.ObjectId;
   request: {
     method: CustomActionMethod;
     url: string;
@@ -37,9 +40,12 @@ const customActionSchema = new Schema<ICustomAction>(
   {
     organizationId: { type: Schema.Types.ObjectId, ref: "Organization", required: true, index: true },
     name: { type: String, required: true, trim: true, maxlength: 100 },
+    category: { type: String, trim: true, maxlength: 80, default: undefined },
     slug: { type: String, required: true, trim: true, lowercase: true, maxlength: 80, match: /^[a-z][a-z0-9_]*$/ },
     description: { type: String, required: true, trim: true, maxlength: 1000 },
     enabled: { type: Boolean, default: false, index: true },
+    audience: { type: String, enum: ["public", "restricted", "verified"], default: "restricted" },
+    integrationId: { type: Schema.Types.ObjectId, ref: "CustomActionIntegration" },
     request: {
       method: { type: String, enum: ["GET", "POST", "PUT", "PATCH", "DELETE"], required: true },
       url: { type: String, required: true, maxlength: 2048 },

@@ -11,7 +11,6 @@ import {
   ShieldCheck,
   Sparkles,
   Trash2,
-  Wrench,
 } from "lucide-react";
 import { Alert, AlertDescription } from "@/shared/ui/alert";
 import { Button } from "@/shared/ui/button";
@@ -361,12 +360,14 @@ export function ComposioToolkitPage() {
           </p>
         </div>
 
-        <div className="grid items-start gap-3 p-4 [grid-auto-rows:min-content] sm:p-5 lg:grid-cols-2">
+        <div className="divide-y divide-border/60">
           {visibleTools.map((tool) => (
             <button
               key={tool.slug}
               type="button"
               role="checkbox"
+              aria-label={tool.name}
+              title={`${tool.name} — ${tool.description}\n${tool.slug}`}
               aria-checked={selectedToolSlugs.has(tool.slug)}
               disabled={!toolkitQuery.data?.available}
               onClick={() =>
@@ -375,44 +376,38 @@ export function ComposioToolkitPage() {
                   !selectedToolSlugs.has(tool.slug),
                 )
               }
-              className={`group flex min-h-0 w-full cursor-pointer items-start gap-3 self-start rounded-xl border p-4 text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 ${selectedToolSlugs.has(tool.slug) ? "border-primary/25 bg-primary/[0.035]" : "border-border/70 bg-background hover:border-border"}`}
+              className={`flex w-full cursor-pointer items-center gap-3 px-4 py-2 text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 sm:px-5 ${selectedToolSlugs.has(tool.slug) ? "bg-primary/[0.035]" : ""}`}
             >
               <span
                 aria-hidden="true"
-                className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-colors ${selectedToolSlugs.has(tool.slug) ? "border-primary bg-primary text-primary-foreground" : "border-border bg-background text-transparent"}`}
+                className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors ${selectedToolSlugs.has(tool.slug) ? "border-primary bg-primary text-primary-foreground" : "border-border bg-background text-transparent"}`}
               >
                 <Check className="h-3.5 w-3.5" />
               </span>
               <span className="min-w-0 flex-1">
-                <span className="flex flex-wrap items-center gap-2">
-                  <span className="font-medium">{tool.name}</span>
-                  <span
-                    className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${tool.risk === "read" ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "bg-amber-500/10 text-amber-700 dark:text-amber-300"}`}
-                  >
-                    {tool.risk === "read" ? (
-                      <Eye className="h-3 w-3" />
-                    ) : (
-                      <CircleAlert className="h-3 w-3" />
-                    )}
-                    {tool.risk === "read"
-                      ? "Read only"
-                      : tool.requiresApproval
-                        ? "Approval required"
-                        : "Write action"}
-                  </span>
-                </span>
-                <span className="mt-2 block max-h-[3.75rem] overflow-hidden text-xs leading-5 text-muted-foreground [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:3]">
+                <span className="block text-sm font-medium">{tool.name}</span>
+                <span className="block truncate text-xs text-muted-foreground">
                   {tool.description}
                 </span>
-                <code className="mt-3 flex max-w-full w-fit items-center gap-1 overflow-hidden rounded bg-muted/60 px-2 py-1 text-[10px] text-muted-foreground">
-                  <Wrench className="h-3 w-3 shrink-0" />
-                  <span className="truncate">{tool.slug}</span>
-                </code>
+              </span>
+              <span
+                className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${tool.risk === "read" ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "bg-amber-500/10 text-amber-700 dark:text-amber-300"}`}
+              >
+                {tool.risk === "read" ? (
+                  <Eye className="h-3 w-3" />
+                ) : (
+                  <CircleAlert className="h-3 w-3" />
+                )}
+                {tool.risk === "read"
+                  ? "Read only"
+                  : tool.requiresApproval
+                    ? "Approval required"
+                    : "Write action"}
               </span>
             </button>
           ))}
           {visibleTools.length === 0 && (
-            <div className="col-span-full rounded-xl border border-dashed border-border/70 px-4 py-10 text-center text-sm text-muted-foreground">
+            <div className="px-4 py-6 text-center text-sm text-muted-foreground">
               No tools match this search and filter.
             </div>
           )}

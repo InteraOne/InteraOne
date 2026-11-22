@@ -141,8 +141,13 @@ export class EmailService {
       }
 
       const verifiedAt = new Date();
-      await Conversation.updateOne(
-        { _id: input.conversationId, organizationId: input.organizationId },
+      const verified = await Conversation.updateOne(
+        {
+          _id: input.conversationId,
+          organizationId: input.organizationId,
+          "metadata.identityVerification.email": challenge.email,
+          "metadata.identityVerification.codeHash": challenge.codeHash,
+        },
         {
           $set: {
             "metadata.identityVerification.verifiedAt": verifiedAt,
@@ -151,6 +156,7 @@ export class EmailService {
           $unset: { "metadata.identityVerification.codeHash": 1 },
         },
       );
+      if (!verified.modifiedCount) return { success: false, statusCode: 400, error: "Verification challenge changed or was already used" };
 
       return { success: true, email: challenge.email, verifiedAt: verifiedAt.toISOString() };
     } catch (err: any) {

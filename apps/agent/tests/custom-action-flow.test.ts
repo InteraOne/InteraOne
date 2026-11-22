@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { InternalApiService } from "../src/infrastructure/api/internal-api.service";
 import { getCustomActionTools } from "../src/modules/agents/tools/custom-action.tools";
+import { executeToolBatch } from "../src/modules/agents/tool-loop";
 
 const context = {
   organizationId: "507f1f77bcf86cd799439011",
@@ -9,6 +10,26 @@ const context = {
 
 describe("custom action agent tools", () => {
   afterEach(() => vi.restoreAllMocks());
+
+  it("defers a dependent mutation emitted before the read result", async () => {
+    const read = vi.fn().mockResolvedValue({ status: "succeeded", id: "order-1" });
+    const cancel = vi.fn();
+    const tools = [
+      { name: "custom_get_order", execute: read },
+      { name: "custom_cancel_order", execute: cancel },
+    ].map(tool => ({ ...tool, description: tool.name, parameters: {}, source: "custom_action" as const, executionMode: "sequential" as const }));
+    const outcomes = await executeToolBatch({
+      tools,
+      context,
+      calls: [
+        { id: "read", name: tools[0].name, input: {} },
+        { id: "cancel", name: tools[1].name, input: { id: "guessed" } },
+      ],
+    });
+    expect(read).toHaveBeenCalledOnce();
+    expect(cancel).not.toHaveBeenCalled();
+    expect(outcomes[1].step.result).toMatchObject({ status: "deferred", executed: false });
+  });
 
   it("hides runtime tenant fields and executes through the internal gateway", async () => {
     vi.spyOn(InternalApiService, "getCustomActionTools").mockResolvedValue({

@@ -11,6 +11,8 @@ export interface ICustomActionApproval extends Document {
   conversationId: Types.ObjectId;
   actionId: Types.ObjectId;
   actionSlug: string;
+  actionVersion?: Date;
+  requesterEmail?: string;
   arguments: Record<string, unknown>;
   status: CustomActionApprovalStatus;
   expiresAt: Date;
@@ -25,6 +27,8 @@ const customActionApprovalSchema = new Schema<ICustomActionApproval>(
     conversationId: { type: Schema.Types.ObjectId, ref: "Conversation", required: true, index: true },
     actionId: { type: Schema.Types.ObjectId, ref: "CustomAction", required: true, index: true },
     actionSlug: { type: String, required: true, maxlength: 80 },
+    actionVersion: Date,
+    requesterEmail: String,
     arguments: { type: Schema.Types.Mixed, required: true, default: {} },
     status: { type: String, enum: ["pending", "approved", "denied", "expired"], default: "pending", index: true },
     expiresAt: { type: Date, required: true },

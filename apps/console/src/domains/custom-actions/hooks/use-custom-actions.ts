@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { customActionsApi } from "../api/custom-actions.api";
 import type { CustomActionPayload } from "../types/types";
+import { toast } from "sonner";
 
 export const customActionKeys = {
   all: ["custom-actions"] as const,
@@ -28,9 +29,31 @@ export function useSaveCustomAction(id?: string) {
 
 export function useDeleteCustomAction() {
   const client = useQueryClient();
-  return useMutation({ mutationFn: customActionsApi.remove, onSuccess: () => client.invalidateQueries({ queryKey: customActionKeys.all }) });
+  return useMutation({
+    mutationFn: customActionsApi.remove,
+    onSuccess: () => { toast.success("Action deleted"); void client.invalidateQueries({ queryKey: customActionKeys.all }); },
+    onError: (error) => toast.error(error.message || "Could not delete action"),
+  });
+}
+
+export function useDeleteCustomActions() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: customActionsApi.bulkRemove,
+    onSuccess: (result) => { toast.success(`${result.count} ${result.count === 1 ? "action" : "actions"} deleted`); void client.invalidateQueries({ queryKey: customActionKeys.all }); },
+    onError: (error) => toast.error(error.message || "Could not delete actions"),
+  });
+}
+
+export function useSetCustomActionsEnabled() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ actionIds, enabled }: { actionIds: string[]; enabled: boolean }) => customActionsApi.bulkStatus(actionIds, enabled),
+    onSuccess: (result) => { toast.success(`${result.count} ${result.count === 1 ? "action" : "actions"} ${result.enabled ? "enabled" : "disabled"}`); void client.invalidateQueries({ queryKey: customActionKeys.all }); },
+    onError: (error) => toast.error(error.message || "Could not update action status"),
+  });
 }
 
 export function useTestCustomAction(id?: string) {
-  return useMutation({ mutationFn: (input: Record<string, unknown>) => customActionsApi.test(id!, input) });
+  return useMutation({ mutationFn: ({ input, requesterEmail }: { input: Record<string, unknown>; requesterEmail?: string }) => customActionsApi.test(id!, input, requesterEmail) });
 }

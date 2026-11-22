@@ -29,6 +29,7 @@ export const InternalApiService = {
   },
 
   async executeCustomActionTool(payload: {
+    messageId?: string;
     organizationId: string;
     conversationId: string;
     toolName: string;

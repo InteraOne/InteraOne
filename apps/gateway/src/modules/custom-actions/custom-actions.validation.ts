@@ -2,13 +2,16 @@ import { AppError } from "@shared/core/errors";
 
 type JsonSchema = Record<string, any>;
 const TYPES = new Set(["string", "number", "integer", "boolean", "object", "array"]);
-const SCHEMA_KEYS = new Set(["type", "description", "properties", "required", "items", "enum", "default", "maxLength", "minimum", "maximum", "maxItems"]);
+const SCHEMA_KEYS = new Set(["type", "description", "properties", "required", "items", "enum", "default", "maxLength", "minimum", "maximum", "maxItems", "additionalProperties"]);
 
 export function validateActionSchema(schema: unknown, depth = 0): asserts schema is JsonSchema {
   if (!schema || typeof schema !== "object" || Array.isArray(schema)) {
     throw new AppError("inputSchema must be a JSON Schema object", 400);
   }
   const value = schema as JsonSchema;
+  if (value.additionalProperties !== undefined && value.additionalProperties !== false) {
+    throw new AppError("Only additionalProperties: false is supported", 400);
+  }
   for (const key of Object.keys(value)) {
     if (!SCHEMA_KEYS.has(key)) throw new AppError(`Unsupported inputSchema keyword: ${key}`, 400);
   }
@@ -47,8 +50,8 @@ export function validateActionInput(schema: JsonSchema, input: unknown, path = "
       if (!input || typeof input !== "object" || Array.isArray(input)) fail("must be an object");
       const record = input as Record<string, unknown>;
       const properties = schema.properties || {};
-      for (const key of schema.required || []) if (record[key] === undefined) fail(`is missing required property ${key}`);
-      for (const key of Object.keys(record)) if (!properties[key]) fail(`contains unknown property ${key}`);
+      for (const key of schema.required || []) if (!Object.hasOwn(record, key)) fail(`is missing required property ${key}`);
+      for (const key of Object.keys(record)) if (!Object.hasOwn(properties, key)) fail(`contains unknown property ${key}`);
       for (const [key, value] of Object.entries(record)) validateActionInput(properties[key], value, `${path}.${key}`);
       return;
     }
@@ -65,8 +68,13 @@ export function validateActionInput(schema: JsonSchema, input: unknown, path = "
       if (schema.maxLength !== undefined && value.length > schema.maxLength) fail(`must be at most ${schema.maxLength} characters`);
       return;
     }
-    case "number": if (typeof input !== "number" || !Number.isFinite(input)) fail("must be a number"); return;
-    case "integer": if (!Number.isInteger(input)) fail("must be an integer"); return;
+    case "number":
+    case "integer": {
+      if (typeof input !== "number" || !Number.isFinite(input) || (schema.type === "integer" && !Number.isInteger(input))) fail(`must be a valid ${schema.type}`);
+      if (schema.minimum !== undefined && (input as number) < schema.minimum) fail(`must be at least ${schema.minimum}`);
+      if (schema.maximum !== undefined && (input as number) > schema.maximum) fail(`must be at most ${schema.maximum}`);
+      return;
+    }
     case "boolean": if (typeof input !== "boolean") fail("must be a boolean"); return;
   }
 }

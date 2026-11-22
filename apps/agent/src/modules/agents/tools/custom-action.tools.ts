@@ -49,7 +49,10 @@ function wrapTool(nativeTool: NativeCustomActionTool, organizationId: string, co
       delete cleanArgs.organizationId;
       delete cleanArgs.conversationId;
       try {
-        const result = await InternalApiService.executeCustomActionTool({ organizationId, conversationId, toolName: nativeTool.name, arguments: cleanArgs });
+        const result = await InternalApiService.executeCustomActionTool({
+          organizationId, conversationId, toolName: nativeTool.name, arguments: cleanArgs,
+          ...(context.messageId ? { messageId: context.messageId } : {}),
+        });
         if (result?.status === "failed") throw new ToolExecutionError("Custom action execution failed", result);
         return result;
       } catch (error: any) {

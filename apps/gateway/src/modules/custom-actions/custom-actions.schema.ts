@@ -9,9 +9,11 @@ const authentication = Joi.object({
 });
 const definition = {
   name: Joi.string().trim().min(1).max(100).required(),
+  category: Joi.string().trim().max(80).allow("").optional(),
   slug: Joi.string().trim().lowercase().pattern(/^[a-z][a-z0-9_]*$/).max(80).required(),
   description: Joi.string().trim().min(1).max(1000).required(),
   enabled: Joi.boolean().default(false),
+  audience: Joi.string().valid("public", "restricted", "verified").optional(),
   request: Joi.object({
     method: Joi.string().valid("GET", "POST", "PUT", "PATCH", "DELETE").required(),
     url: Joi.string().trim().max(2048).required(),
@@ -29,18 +31,34 @@ const definition = {
 };
 
 export const customActionsSchema = {
+  import: Joi.object({
+    specification: Joi.string().max(1000000).required(),
+    baseUrl: Joi.string().max(1000).allow("").optional(),
+    authentication: authentication.required(),
+  }),
   agentContext: Joi.object({
     organizationId: Joi.string().hex().length(24).required(),
     conversationId: Joi.string().hex().length(24).required(),
   }),
   agentExecute: Joi.object({
+    messageId: Joi.string().hex().length(24).optional(),
     organizationId: Joi.string().hex().length(24).required(),
     conversationId: Joi.string().hex().length(24).required(),
     toolName: Joi.string().trim().min(1).max(160).required(),
     arguments: Joi.object().default({}).required(),
   }),
   create: Joi.object(definition),
+  bulkStatus: Joi.object({
+    actionIds: Joi.array().items(Joi.string().hex().length(24)).min(1).max(1000).unique().required(),
+    enabled: Joi.boolean().required(),
+  }),
+  bulkDelete: Joi.object({
+    actionIds: Joi.array().items(Joi.string().hex().length(24)).min(1).max(1000).unique().required(),
+  }),
   update: Joi.object(Object.fromEntries(Object.entries(definition).map(([key, value]) => [key, (value as Joi.AnySchema).optional()]))).min(1),
   params: Joi.object({ actionId: Joi.string().hex().length(24).required() }),
-  test: Joi.object({ input: Joi.object().unknown(true).default({}).required() }),
+  test: Joi.object({
+    input: Joi.object().unknown(true).default({}).required(),
+    requesterEmail: Joi.string().email().max(254).optional(),
+  }),
 };

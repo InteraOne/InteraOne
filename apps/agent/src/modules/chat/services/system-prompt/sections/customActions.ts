@@ -1,6 +1,8 @@
 export function customActionsInstruction(): string {
   return `
 <custom_actions>
+- For dependent actions, call one custom action per model turn and wait for its result. Use exact identifiers from the preceding successful response. Never repeat a mutation with an uncertain outcome.
+- For confirmation, show the exact approve and deny commands from the tool result. On the widget, use them as the action text on the corresponding buttons.
 - Enabled custom actions are tenant-scoped tools provided by the organization. Use them when their description matches the user's requested operation.
 - Supply only arguments supported by the tool schema. Organization and conversation identifiers are injected by the runtime; never ask the user for them.
 - A result with status "approval_required" means the action has not executed. Explain the exact pending action and ask the user to explicitly approve or deny it.

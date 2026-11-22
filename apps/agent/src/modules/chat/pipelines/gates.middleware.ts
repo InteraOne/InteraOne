@@ -12,6 +12,7 @@ import {
 import { makeTimer } from "../../../shared/timing";
 import { Channel, MiddlewareContext, MiddlewareResult } from "../chat.types";
 import { shouldGroundKnowledgeRequest } from "./knowledge-grounding";
+import { getCustomActionTools } from "../../agents/tools/custom-action.tools";
 
 // Re-export makeTimer so callers can construct a MiddlewareContext conveniently
 export { makeTimer };
@@ -343,13 +344,19 @@ export async function executePreChecks(
   if (otpCheck.shouldReturn) return { shouldReturn: true };
 
   // Gate 4 — FAQ fast-path (skipped when message was an OTP code)
-  const faqCheck = await checkFaqFastPath(ctx, otpCheck.otpCode);
-  if (faqCheck.shouldReturn) return { shouldReturn: true };
+  const customActions = await getCustomActionTools({
+    organizationId: ctx.job.organizationId, conversationId: ctx.conversationId,
+  });
+  if (!customActions.tools.length) {
+    const faqCheck = await checkFaqFastPath(ctx, otpCheck.otpCode);
+    if (faqCheck.shouldReturn) return { shouldReturn: true };
+  }
 
   return {
     shouldReturn: false,
     channel: gateCheck.channel,
     verifiedIdentityEmail: otpCheck.verifiedIdentityEmail,
     otpCode: otpCheck.otpCode,
+    customActions,
   };
 }

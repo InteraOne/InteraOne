@@ -4,9 +4,12 @@ export type CustomActionAuthType = "none" | "bearer" | "basic" | "api_key";
 export interface CustomAction {
   _id: string;
   name: string;
+  category?: string;
   slug: string;
   description: string;
   enabled: boolean;
+  audience?: "public" | "restricted" | "verified";
+  integrationId?: string;
   request: {
     method: CustomActionMethod;
     url: string;
@@ -29,9 +32,11 @@ export interface CustomAction {
 
 export interface CustomActionPayload {
   name: string;
+  category?: string;
   slug: string;
   description: string;
   enabled: boolean;
+  audience?: CustomAction["audience"];
   request: CustomAction["request"];
   authentication: {
     type: CustomActionAuthType;
