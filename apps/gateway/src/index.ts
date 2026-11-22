@@ -39,6 +39,7 @@ import { leadsRouter } from "@modules/leads";
 import { accountsRouter } from "@modules/accounts";
 import { leadSourcesRouter } from "@modules/lead-sources";
 import { integrationsRouter } from "@modules/integrations";
+import { customActionsRouter } from "@modules/custom-actions";
 import { setupSwagger } from "@shared/infra/swagger";
 
 class Application {
@@ -161,6 +162,7 @@ class Application {
     router.use("/crm/organizations", accountsRouter);
     router.use("/lead-sources", leadSourcesRouter);
     router.use("/integrations", integrationsRouter);
+    router.use("/actions", customActionsRouter);
 
     // Public config endpoint
     router.get("/config", (req, res) => {

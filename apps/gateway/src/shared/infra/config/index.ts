@@ -92,6 +92,9 @@ interface Config {
     environment: string;
     timeoutMs: number;
   };
+  customActions: {
+    encryptionKey?: string;
+  };
 }
 
 function parseEmailProvider(value?: string): Config["email"]["provider"] {
@@ -279,6 +282,13 @@ const config: Config = {
     redirectUrl: process.env.COMPOSIO_REDIRECT_URL,
     environment: process.env.COMPOSIO_ENVIRONMENT || process.env.NODE_ENV || "development",
     timeoutMs: parseInt(process.env.COMPOSIO_TIMEOUT_MS || "15000", 10),
+  },
+  customActions: {
+    // Keep the existing key as a compatibility fallback while deployments
+    // migrate to the integration-neutral setting.
+    encryptionKey:
+      process.env.CUSTOM_ACTION_ENCRYPTION_KEY ||
+      process.env.LEAD_SOURCE_ENCRYPTION_KEY,
   },
 };
 

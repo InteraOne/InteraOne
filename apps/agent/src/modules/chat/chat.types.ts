@@ -63,6 +63,7 @@ export interface MiddlewareContext {
 }
 
 export interface MiddlewareResult {
+  customActions?: Awaited<ReturnType<typeof import("../agents/tools/custom-action.tools").getCustomActionTools>>;
   shouldReturn: boolean;
   verifiedIdentityEmail?: string | null;
   otpCode?: string | null;

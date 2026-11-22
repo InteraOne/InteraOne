@@ -112,9 +112,25 @@ export async function executeToolBatch(input: {
   // call as a structured, non-executed result. The next round then receives the
   // real SDK result and can form the next native call from literal values.
   let composioCallSeen = false;
+  let customActionSeen = false;
   const deferredIndexes = new Set<number>();
   input.calls.forEach((call, index) => {
     const tool = input.tools.find((candidate) => candidate.name === call.name);
+    if (tool?.source === "custom_action") {
+      if (customActionSeen) {
+        outcomes[index] = {
+          call,
+          deferred: true,
+          step: {
+            toolName: call.name, args: {}, timestamp: new Date(),
+            result: { status: "deferred", executed: false, message: "Wait for the earlier custom action result before making this call." },
+          },
+        };
+        deferredIndexes.add(index);
+      }
+      customActionSeen = true;
+      return;
+    }
     if (tool?.source !== "composio") return;
     if (composioCallSeen) {
       outcomes[index] = deferredComposioOutcome(call);

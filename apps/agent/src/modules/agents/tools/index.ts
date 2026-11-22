@@ -1,5 +1,6 @@
 import { Tool, ToolFilterOptions } from "../agent.types";
 import { getComposioSessionTools } from "./composio-session.tools";
+import { getCustomActionTools } from "./custom-action.tools";
 
 export interface ToolResolution {
   tools: Tool[];
@@ -28,6 +29,7 @@ export function getAllTools(): Tool[] {
 /** Returns dynamically filtered tools based on conversation context/configuration */
 export async function getToolsForContext(
   options: ToolFilterOptions,
+  preloadedCustomActions?: Awaited<ReturnType<typeof getCustomActionTools>>,
 ): Promise<ToolResolution> {
   let tools = [...registry.values()];
 
@@ -48,8 +50,18 @@ export async function getToolsForContext(
     conversationId: options.conversationId,
     channel: options.channel || "widget",
   });
+  const customActions = preloadedCustomActions ?? await getCustomActionTools({
+    organizationId: options.organizationId,
+    conversationId: options.conversationId,
+  });
   const names = new Set(tools.map((tool) => tool.name));
   for (const tool of composioSession.tools) {
+    if (!names.has(tool.name)) {
+      tools.push(tool);
+      names.add(tool.name);
+    }
+  }
+  for (const tool of customActions.tools) {
     if (!names.has(tool.name)) {
       tools.push(tool);
       names.add(tool.name);
@@ -58,7 +70,7 @@ export async function getToolsForContext(
 
   return {
     tools,
-    connectedIntent: composioSession.tools.length > 0,
+    connectedIntent: composioSession.tools.length > 0 || customActions.tools.length > 0,
     connectedStatus: composioSession.status,
     connectedMessage: composioSession.message,
     composioSessionId: composioSession.sessionId,

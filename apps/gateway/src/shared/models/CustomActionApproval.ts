@@ -1,0 +1,49 @@
+import mongoose, { Document, Schema, Types } from "mongoose";
+
+export type CustomActionApprovalStatus =
+  | "pending"
+  | "approved"
+  | "denied"
+  | "expired";
+
+export interface ICustomActionApproval extends Document {
+  organizationId: Types.ObjectId;
+  conversationId: Types.ObjectId;
+  actionId: Types.ObjectId;
+  actionSlug: string;
+  actionVersion?: Date;
+  requesterEmail?: string;
+  arguments: Record<string, unknown>;
+  status: CustomActionApprovalStatus;
+  expiresAt: Date;
+  resolvedAt?: Date;
+  executionState?: "running" | "completed";
+  executionResult?: Record<string, any>;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+const customActionApprovalSchema = new Schema<ICustomActionApproval>(
+  {
+    organizationId: { type: Schema.Types.ObjectId, ref: "Organization", required: true, index: true },
+    conversationId: { type: Schema.Types.ObjectId, ref: "Conversation", required: true, index: true },
+    actionId: { type: Schema.Types.ObjectId, ref: "CustomAction", required: true, index: true },
+    actionSlug: { type: String, required: true, maxlength: 80 },
+    actionVersion: Date,
+    requesterEmail: String,
+    arguments: { type: Schema.Types.Mixed, required: true, default: {} },
+    status: { type: String, enum: ["pending", "approved", "denied", "expired"], default: "pending", index: true },
+    expiresAt: { type: Date, required: true },
+    resolvedAt: { type: Date, default: undefined },
+    executionState: { type: String, enum: ["running", "completed"], default: undefined },
+    executionResult: { type: Schema.Types.Mixed, default: undefined },
+  },
+  { timestamps: true },
+);
+
+customActionApprovalSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 86400 });
+
+export const CustomActionApproval = mongoose.model<ICustomActionApproval>(
+  "CustomActionApproval",
+  customActionApprovalSchema,
+);

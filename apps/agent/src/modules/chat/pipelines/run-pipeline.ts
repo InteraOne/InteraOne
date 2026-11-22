@@ -19,6 +19,8 @@ import {
   isComposioSessionTool,
 } from "../../agents/tools/composio-session.tools";
 import { composioSessionInstruction } from "../services/system-prompt/sections/composio";
+import { customActionsInstruction } from "../services/system-prompt/sections/customActions";
+import { isCustomActionTool } from "../../agents/tools/custom-action.tools";
 import {
   broaderKnowledgeQuery,
   containsFabricatedPlaceholder,
@@ -124,7 +126,7 @@ export async function runPipeline(job: AIJobData): Promise<void> {
         evidence = verifiedEvidence(result);
       }
 
-      if (evidence.length === 0) {
+      if (evidence.length === 0 && !preCheck.customActions?.tools.length) {
         await publishResponse({
           conversationId,
           messageId: job.messageId,
@@ -139,7 +141,7 @@ export async function runPipeline(job: AIJobData): Promise<void> {
 <verified_tenant_knowledge>
 Use only the following retrieved evidence for the current factual question:
 ${JSON.stringify(evidence)}
-Do not use model memory for facts. Do not invent names, expansions of acronyms, locations, dates, contact details, affiliations, or accreditation. Never output bracketed placeholders. If a requested fact is absent, say it is not available in the retrieved evidence.
+Use successful custom action results as evidence for live API data. Do not use model memory for facts. Do not invent names, expansions of acronyms, locations, dates, contact details, affiliations, or accreditation. Never output bracketed placeholders. If a requested fact is absent, say it is not available in the retrieved evidence.
 </verified_tenant_knowledge>`;
     }
 
@@ -166,7 +168,7 @@ Do not use model memory for facts. Do not invent names, expansions of acronyms, 
         channel,
         organizationId: job.organizationId,
         conversationId: job.conversationId,
-      });
+      }, preCheck.customActions);
       // Evidence is already retrieved for a factual knowledge turn. Sending
       // the tool catalog would add schema tokens and allow duplicate searches.
       const tools = capabilities.supportsTools
@@ -176,9 +178,13 @@ Do not use model memory for facts. Do not invent names, expansions of acronyms, 
         : [];
 
       const hasConnectedTools = tools.some(isComposioSessionTool);
+      const hasCustomActions = tools.some(isCustomActionTool);
 
       if (hasConnectedTools) {
         messages[0].content += composioSessionInstruction();
+      }
+      if (hasCustomActions) {
+        messages[0].content += customActionsInstruction();
       }
 
       console.time(t("llm"));

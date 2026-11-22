@@ -33,6 +33,7 @@ import {
   Building2,
   Plug,
   Flame,
+  Bolt,
 } from "lucide-react";
 import { useAuth } from "@/domains/auth/hooks/useAuth";
 import { useLogout } from "@/domains/auth/hooks/useLogout";
@@ -87,6 +88,7 @@ const getBreadcrumbIcon = (path: string, label: string): LucideIcon | null => {
     return Users2;
   if (path.startsWith("/dashboard/channels")) return Radio;
   if (path.startsWith("/dashboard/integrations")) return Plug;
+  if (path.startsWith("/dashboard/custom-actions")) return Bolt;
   if (path.startsWith("/dashboard/agents")) return UserCog;
   if (path.startsWith("/dashboard/members")) return UserCheck;
   if (path.startsWith("/dashboard/widget/qr") || normalizedLabel === "qr codes")
@@ -292,6 +294,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         { label: "Knowledge Realtime", to: "/dashboard/knowledge/realtime" },
         { label: "Widget", to: "/dashboard/widget" },
         { label: "Integrations", to: "/dashboard/integrations" },
+        { label: "Custom Actions", to: "/dashboard/custom-actions" },
       );
     }
 
@@ -802,7 +805,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           {(orgRole === "admin" || orgRole === "owner") && (
             <div className="space-y-1">
               <p className="px-3 pb-1 text-[11px] uppercase tracking-wide text-muted-foreground">
-                AI and Widget
+                AI &amp; Knowledge
               </p>
 
               {[
@@ -836,21 +839,14 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                   </Button>
                 </Link>
               ))}
+            </div>
+          )}
 
-              <Link to="/dashboard/widget">
-                <Button
-                  data-tour-id="sidebar-nav-widget"
-                  variant="ghost"
-                  className={`w-full flex items-center px-3 py-2 text-sm cursor-pointer font-medium rounded-lg transition-colors justify-start ${
-                    isActive("/dashboard/widget", true)
-                      ? "bg-primary/10 text-primary border-r-2 border-primary"
-                      : "text-muted-foreground hover:bg-accent hover:text-foreground"
-                  }`}
-                >
-                  <Crown className="h-5 w-5 mr-3" />
-                  <span className="flex-1 text-left">Widget</span>
-                </Button>
-              </Link>
+          {(orgRole === "admin" || orgRole === "owner") && (
+            <div className="space-y-1">
+              <p className="px-3 pb-1 text-[11px] uppercase tracking-wide text-muted-foreground">
+                AI Automation
+              </p>
 
               <Link to="/dashboard/integrations">
                 <Button
@@ -864,6 +860,44 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                 >
                   <Plug className="h-5 w-5 mr-3" />
                   <span className="flex-1 text-left">Integrations</span>
+                </Button>
+              </Link>
+
+              <Link to="/dashboard/custom-actions">
+                <Button
+                  data-tour-id="sidebar-nav-custom-actions"
+                  variant="ghost"
+                  className={`w-full flex items-center px-3 py-2 text-sm cursor-pointer font-medium rounded-lg transition-colors justify-start ${
+                    isActive("/dashboard/custom-actions", true)
+                      ? "bg-primary/10 text-primary border-r-2 border-primary"
+                      : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                  }`}
+                >
+                  <Bolt className="h-5 w-5 mr-3" />
+                  <span className="flex-1 text-left">Custom Actions</span>
+                </Button>
+              </Link>
+            </div>
+          )}
+
+          {(orgRole === "admin" || orgRole === "owner") && (
+            <div className="space-y-1">
+              <p className="px-3 pb-1 text-[11px] uppercase tracking-wide text-muted-foreground">
+                Widget &amp; Channels
+              </p>
+
+              <Link to="/dashboard/widget">
+                <Button
+                  data-tour-id="sidebar-nav-widget"
+                  variant="ghost"
+                  className={`w-full flex items-center px-3 py-2 text-sm cursor-pointer font-medium rounded-lg transition-colors justify-start ${
+                    isActive("/dashboard/widget", true)
+                      ? "bg-primary/10 text-primary border-r-2 border-primary"
+                      : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                  }`}
+                >
+                  <Crown className="h-5 w-5 mr-3" />
+                  <span className="flex-1 text-left">Widget</span>
                 </Button>
               </Link>
 

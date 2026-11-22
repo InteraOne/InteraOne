@@ -121,3 +121,14 @@ export {
   IIntegrationApproval,
   IntegrationApprovalStatus,
 } from "./IntegrationApproval";
+export {
+  CustomAction,
+  ICustomAction,
+  CustomActionMethod,
+  CustomActionAuthType,
+} from "./CustomAction";
+export {
+  CustomActionApproval,
+  ICustomActionApproval,
+  CustomActionApprovalStatus,
+} from "./CustomActionApproval";

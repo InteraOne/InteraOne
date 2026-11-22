@@ -1,11 +1,14 @@
 import swaggerJSDoc from "swagger-jsdoc";
 import swaggerUi from "swagger-ui-express";
 import { Application } from "express";
+import { resolve } from "node:path";
 import config from "@shared/infra/config";
+import { supplementalPaths } from "./supplemental-paths";
 
 const options: swaggerJSDoc.Options = {
   definition: {
     openapi: "3.0.0",
+    paths: supplementalPaths(),
     info: {
       title: "Interaone API Documentation",
       version: "1.0.0",
@@ -28,9 +31,9 @@ const options: swaggerJSDoc.Options = {
     },
   },
   apis: [
-    "./src/modules/**/*.routes.ts",
-    "./src/modules/**/*.controller.ts",
-    "./src/shared/**/*.ts",
+    resolve(__dirname, "../../../modules/**/*.routes.{ts,js}"),
+    resolve(__dirname, "../../../modules/**/*.controller.{ts,js}"),
+    resolve(__dirname, "../../../shared/**/*.{ts,js}"),
   ],
 };
 
