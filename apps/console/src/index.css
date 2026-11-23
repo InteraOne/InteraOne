@@ -297,6 +297,60 @@
 }
 
 @layer utilities {
+  .crm-table-scroll {
+    scrollbar-color: color-mix(in srgb, var(--foreground) 16%, transparent)
+      transparent;
+    scrollbar-width: thin;
+  }
+
+  .crm-table-scroll::-webkit-scrollbar {
+    height: 10px;
+  }
+
+  .crm-table-scroll::-webkit-scrollbar-thumb {
+    background: color-mix(in srgb, var(--foreground) 14%, transparent);
+    border: 3px solid transparent;
+    border-radius: 999px;
+    background-clip: padding-box;
+  }
+
+  .crm-checkbox {
+    appearance: none;
+    width: 15px;
+    height: 15px;
+    border: 1px solid color-mix(in srgb, var(--foreground) 25%, transparent);
+    border-radius: 4px;
+    background: var(--background);
+    display: grid;
+    place-content: center;
+    transition: 120ms ease;
+  }
+
+  .crm-checkbox::before {
+    content: "";
+    width: 7px;
+    height: 4px;
+    border: solid var(--primary-foreground);
+    border-width: 0 0 1.5px 1.5px;
+    transform: rotate(-45deg) scale(0);
+    margin-top: -1px;
+    transition: 100ms ease;
+  }
+
+  .crm-checkbox:checked {
+    border-color: var(--primary);
+    background: var(--primary);
+  }
+
+  .crm-checkbox:checked::before {
+    transform: rotate(-45deg) scale(1);
+  }
+
+  .crm-checkbox:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--ring) 45%, transparent);
+    outline-offset: 2px;
+  }
+
   .type-display-lg {
     font-family: var(--font-sans);
     font-size: var(--type-display-lg-size);

@@ -213,8 +213,10 @@ function EditableRow({
   };
 
   return (
-    <div className="group grid min-h-11 grid-cols-[104px_minmax(0,1fr)] items-center gap-2 border-b border-border/60 px-3 py-1 last:border-b-0 hover:bg-muted/30">
-      <span className="text-xs font-medium text-muted-foreground">{label}</span>
+    <div className="group grid min-h-12 grid-cols-[112px_minmax(0,1fr)] items-center gap-3 border-b border-border/50 px-4 py-1.5 last:border-b-0 hover:bg-foreground/[0.025]">
+      <span className="text-xs font-medium text-muted-foreground/85">
+        {label}
+      </span>
       {editing ? (
         <div className="space-y-2 py-1.5">
           <Input
@@ -259,7 +261,7 @@ function EditableRow({
             setDraft(value === "—" ? "" : value);
             setEditing(true);
           }}
-          className="flex min-h-9 min-w-0 items-center justify-between gap-2 rounded-md px-2 py-2 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="flex min-h-9 min-w-0 items-center justify-between gap-2 rounded-md px-1 py-2 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           title={`Edit ${label.toLowerCase()}`}
         >
           <span
@@ -284,11 +286,12 @@ function PanelSection({
   children: React.ReactNode;
 }) {
   return (
-    <section className="border-t border-border px-4 py-4 first:border-t-0">
-      <div className="mb-3 flex items-center gap-2">
-        <ChevronDown className="h-4 w-4 text-muted-foreground" />
-        {icon}
-        <h2 className="text-sm font-semibold tracking-tight">{title}</h2>
+    <section className="border-t border-border/60 px-5 py-5 first:border-t-0">
+      <div className="mb-3.5 flex items-center gap-2">
+        {icon ? <span className="text-muted-foreground">{icon}</span> : null}
+        <h2 className="text-xs font-semibold uppercase tracking-[0.09em] text-muted-foreground">
+          {title}
+        </h2>
       </div>
       {children}
     </section>
@@ -771,13 +774,15 @@ function ContactInformationPanel({
   );
 
   return (
-    <Card className="overflow-hidden shadow-sm xl:sticky xl:top-6">
-      <div className="flex items-center gap-3 bg-gradient-to-r from-primary/[0.08] to-transparent px-4 py-4">
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground shadow-sm">
+    <Card className="gap-0 overflow-visible rounded-2xl border border-border/70 bg-card py-0 shadow-[0_1px_2px_rgba(0,0,0,0.03),0_12px_36px_rgba(0,0,0,0.035)] ring-0 xl:sticky xl:top-6">
+      <div className="flex items-center gap-3 px-5 py-5">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-primary/10 bg-primary/[0.09] text-sm font-semibold text-primary">
           {initials}
         </div>
         <div className="min-w-0 flex-1">
-          <p className="truncate font-semibold leading-tight">{contact.name}</p>
+          <p className="truncate text-sm font-semibold leading-tight">
+            Contact details
+          </p>
           <p className="mt-1 truncate text-xs text-muted-foreground">
             {account?.name ||
               contact.company ||
@@ -788,7 +793,7 @@ function ContactInformationPanel({
       </div>
       <PanelSection title="Summary">
         <div className="space-y-3 text-sm">
-          <div className="relative rounded-lg border border-border/70 bg-muted/20 p-3">
+          <div className="relative rounded-xl border border-border/60 bg-foreground/[0.018] p-3.5">
             <div className="flex items-start gap-2">
               <Tags className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
               <div className="min-w-0 flex-1">
@@ -922,7 +927,7 @@ function ContactInformationPanel({
               </div>
             </div>
           </div>
-          <div className="overflow-hidden rounded-lg border border-border/70">
+          <div className="overflow-hidden rounded-xl border border-border/60 bg-background/50">
             <a
               href={contact.email ? `mailto:${contact.email}` : undefined}
               className="flex min-h-10 items-center gap-3 border-b border-border/60 px-3 py-2 text-primary hover:bg-muted/40"
@@ -958,7 +963,7 @@ function ContactInformationPanel({
         </div>
       </PanelSection>
       <PanelSection title="Details">
-        <div className="overflow-hidden rounded-lg border border-border/70">
+        <div className="overflow-hidden rounded-xl border border-border/60 bg-background/50">
           <EditableRow
             label="First name"
             value={firstName}
@@ -992,7 +997,7 @@ function ContactInformationPanel({
         title="Organization"
         icon={<Building2 className="h-4 w-4 text-primary" />}
       >
-        <div className="rounded-lg border border-border/70">
+        <div className="overflow-hidden rounded-xl border border-border/60 bg-background/50">
           {(
             [
               ["name", "Name"],
@@ -1481,16 +1486,17 @@ function ActivityComposer({
     if (!timelineInteraction || !timelineRef.current) return;
     const timelineRect = timelineRef.current.getBoundingClientRect();
     const pointerY =
-      event.clientY -
-      timelineRect.top +
-      timelineRef.current.scrollTop;
+      event.clientY - timelineRect.top + timelineRef.current.scrollTop;
     const pointerMinutes = Math.round(((pointerY / 48) * 60) / 15) * 15;
     if (timelineInteraction === "resize-start") {
       const endMinutes =
         endAt.toDateString() === startAt.toDateString()
           ? endAt.getHours() * 60 + endAt.getMinutes()
           : 24 * 60;
-      const nextMinutes = Math.max(0, Math.min(endMinutes - 15, pointerMinutes));
+      const nextMinutes = Math.max(
+        0,
+        Math.min(endMinutes - 15, pointerMinutes),
+      );
       const nextStart = new Date(`${startDate}T00:00`);
       nextStart.setMinutes(nextMinutes);
       setStartTime(localTime(nextStart));
@@ -3048,7 +3054,7 @@ function ContactActivityWorkspace({ contact }: { contact: Contact }) {
             : "Add an activity or follow-up for this contact.";
 
   return (
-    <div className="space-y-6">
+    <div className="contact-activity-workspace space-y-5">
       <ActivityWorkspaceComposer
         tab={tab}
         onTabChange={setTab}
@@ -3919,24 +3925,112 @@ export function ContactDetailsPage() {
       </div>
     );
   const contactView = toContactViewModel(contact);
+  const initials = contactView.name
+    .split(" ")
+    .filter(Boolean)
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+  const lifecycleTone =
+    contactView.lifecycleStage === "customer"
+      ? "bg-emerald-500/[0.09] text-emerald-700 dark:text-emerald-300"
+      : contactView.lifecycleStage === "opportunity"
+        ? "bg-violet-500/[0.09] text-violet-700 dark:text-violet-300"
+        : contactView.lifecycleStage === "qualified"
+          ? "bg-blue-500/[0.09] text-blue-700 dark:text-blue-300"
+          : "bg-foreground/[0.05] text-muted-foreground";
   return (
-    <div className="w-full space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="crm-workspace w-full space-y-6 pb-10">
+      <div className="flex items-center justify-between border-b border-border/60 pb-3">
         <Button
           variant="ghost"
+          size="sm"
+          className="-ml-2 text-muted-foreground hover:text-foreground"
           onClick={() => navigate("/dashboard/crm/contacts")}
         >
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          All contacts
+          <ArrowLeft className="mr-1 h-4 w-4" />
+          Contacts
         </Button>
-        <div className="text-right">
-          <h1 className="text-xl font-semibold">{contactView.name}</h1>
-          <p className="text-xs text-muted-foreground">
-            Owner: {contactView.owner?.name || "Unassigned"}
-          </p>
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+          CRM contact
         </div>
       </div>
-      <div className="grid items-start gap-4 xl:grid-cols-[390px_minmax(0,1fr)]">
+
+      <section className="flex flex-col gap-5 rounded-2xl border border-border/70 bg-card p-5 shadow-[0_1px_2px_rgba(0,0,0,0.025)] sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 items-center gap-4">
+          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-primary/10 bg-primary/[0.09] text-lg font-semibold text-primary">
+            {initials || "?"}
+          </div>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2.5">
+              <h1 className="truncate text-2xl font-semibold tracking-[-0.025em]">
+                {contactView.name}
+              </h1>
+              <span
+                className={`rounded-md px-2 py-1 text-xs font-medium capitalize ${lifecycleTone}`}
+              >
+                {contactView.lifecycleStage}
+              </span>
+            </div>
+            <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
+              {contactView.company && (
+                <span className="flex items-center gap-1.5">
+                  <Building2 className="h-3.5 w-3.5" />
+                  {contactView.company}
+                </span>
+              )}
+              <span className="flex items-center gap-1.5">
+                <UserRound className="h-3.5 w-3.5" />
+                {contactView.owner?.name || "Unassigned"}
+              </span>
+              {contactView.tags.slice(0, 2).map((tag) => (
+                <span
+                  key={tag}
+                  className="rounded bg-foreground/[0.05] px-1.5 py-0.5 text-xs"
+                >
+                  {tag}
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+        <div className="flex shrink-0 flex-wrap gap-2">
+          {contactView.email ? (
+            <Button
+              asChild
+              variant="outline"
+              className="border-border/70 bg-background"
+            >
+              <a href={`mailto:${contactView.email}`}>
+                <Mail className="h-4 w-4" /> Email
+              </a>
+            </Button>
+          ) : (
+            <Button variant="outline" disabled>
+              <Mail className="h-4 w-4" /> Email
+            </Button>
+          )}
+          {contactView.phone ? (
+            <Button
+              asChild
+              variant="outline"
+              className="border-border/70 bg-background"
+            >
+              <a href={`tel:${contactView.phone}`}>
+                <Phone className="h-4 w-4" /> Call
+              </a>
+            </Button>
+          ) : (
+            <Button variant="outline" disabled>
+              <Phone className="h-4 w-4" /> Call
+            </Button>
+          )}
+        </div>
+      </section>
+
+      <div className="grid items-start gap-5 xl:grid-cols-[360px_minmax(0,1fr)]">
         <ContactInformationPanel
           contact={contactView}
           organization={organization}

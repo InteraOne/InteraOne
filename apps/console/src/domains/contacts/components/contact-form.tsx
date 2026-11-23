@@ -18,14 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/shared/ui/select";
-import {
-  Building2,
-  User,
-  Loader2,
-  Edit2,
-  Plus,
-  X,
-} from "lucide-react";
+import { Building2, User, Loader2, Edit2, Plus, X } from "lucide-react";
 import { toast } from "sonner";
 import { useContactOwners, useUpdateContact } from "../hooks/use-contacts";
 import { useUpdateContactAssociation } from "@/domains/conversation/hooks";
@@ -221,7 +214,7 @@ export function ContactForm({
       className={mode === "create" ? "flex min-h-0 flex-col" : "space-y-5"}
     >
       {mode === "create" ? (
-        <div className="grid max-h-[calc(90vh-158px)] gap-5 overflow-y-auto overscroll-contain p-6 md:grid-cols-2 [&>div]:self-start [&>div]:rounded-xl [&>div]:border [&>div]:border-border/80 [&>div]:bg-muted/10 [&>div]:p-4">
+        <div className="grid max-h-[calc(90vh-158px)] gap-x-8 gap-y-6 overflow-y-auto overscroll-contain bg-foreground/[0.012] p-6 md:grid-cols-2 [&>div]:self-start">
           <div className="grid gap-2">
             <Label htmlFor="contact-name">Name *</Label>
             <Input
@@ -971,24 +964,23 @@ export function ContactDialog({
       <DialogContent
         className={
           mode === "create"
-            ? "max-h-[90vh] gap-0 overflow-hidden p-0 sm:max-w-5xl"
+            ? "max-h-[90vh] gap-0 overflow-hidden rounded-2xl border-border/70 p-0 sm:max-w-5xl"
             : "max-h-[90vh] overflow-x-hidden overflow-y-auto sm:max-w-180"
         }
       >
         <DialogHeader
           className={
-            mode === "create" ? "border-b border-border px-6 py-5" : ""
+            mode === "create"
+              ? "border-b border-border/60 bg-background px-6 py-5"
+              : ""
           }
         >
           <DialogTitle>
-            {mode === "create"
-              ? "Add new contact"
-              : "Update Customer Information"}
+            {mode === "create" ? "Create contact" : "Update contact"}
           </DialogTitle>
           {mode === "create" && (
             <DialogDescription>
-              Capture customer details so agents can provide faster, more
-              personal support.
+              Add the essentials now. You can enrich the profile at any time.
             </DialogDescription>
           )}
         </DialogHeader>
