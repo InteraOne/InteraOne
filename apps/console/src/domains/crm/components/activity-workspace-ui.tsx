@@ -71,17 +71,17 @@ export function ActivityWorkspaceComposer({
   children: ReactNode;
 }) {
   return (
-    <Card className="overflow-hidden">
-      <div className="flex overflow-x-auto border-b border-border px-2">
+    <Card className="gap-0 overflow-hidden rounded-2xl border border-border/70 bg-card py-0 shadow-[0_1px_2px_rgba(0,0,0,0.03),0_12px_36px_rgba(0,0,0,0.035)] ring-0">
+      <div className="flex gap-1 overflow-x-auto border-b border-border/60 bg-foreground/[0.012] px-3 py-2.5">
         {tabs.map(({ id, label, icon: Icon, iconClass }) => (
           <button
             key={id}
             type="button"
             onClick={() => onTabChange(id)}
-            className={`flex shrink-0 items-center gap-2 border-b-2 px-3 py-3 text-sm font-medium transition-colors ${
+            className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
               tab === id
-                ? "border-primary bg-primary/[0.04] text-primary"
-                : "border-transparent text-muted-foreground hover:text-foreground"
+                ? "bg-background text-foreground shadow-sm ring-1 ring-border/60"
+                : "text-muted-foreground hover:bg-foreground/[0.035] hover:text-foreground"
             }`}
           >
             <Icon className={`h-4 w-4 ${iconClass}`} />
@@ -89,7 +89,7 @@ export function ActivityWorkspaceComposer({
           </button>
         ))}
       </div>
-      <CardContent className={flushContent ? "p-0" : "p-5"}>
+      <CardContent className={flushContent ? "p-0" : "p-5 sm:p-6"}>
         {children}
       </CardContent>
     </Card>
@@ -107,7 +107,7 @@ export function ActivityWorkspaceSectionHeader({
 }) {
   return (
     <div className="flex items-center justify-between gap-3">
-      <h2 className="flex items-center gap-2 font-semibold">
+      <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.08em] text-muted-foreground">
         {title} <ChevronDown className="h-4 w-4" />
       </h2>
       {typeof expanded === "boolean" && onExpandedChange ? (
@@ -143,11 +143,13 @@ export function ActivityWorkspaceHistoryCard({
   children: ReactNode;
 }) {
   return (
-    <Card className="overflow-visible">
-      <div className="border-b border-border px-5 py-4">
-        <h2 className="font-semibold">History</h2>
+    <Card className="gap-0 overflow-visible rounded-2xl border border-border/70 bg-card py-0 shadow-[0_1px_2px_rgba(0,0,0,0.025)] ring-0">
+      <div className="border-b border-border/60 px-5 py-4">
+        <h2 className="text-sm font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+          History
+        </h2>
       </div>
-      <CardContent className="pt-5">{children}</CardContent>
+      <CardContent className="px-5 py-5">{children}</CardContent>
     </Card>
   );
 }
@@ -162,16 +164,16 @@ export function ActivityWorkspaceHistoryFilters<T extends string>({
   onChange: (filter: T) => void;
 }) {
   return (
-    <div className="mb-5 flex gap-1 overflow-x-auto pb-2">
+    <div className="mb-5 flex gap-1.5 overflow-x-auto pb-2">
       {filters.map((filter) => (
         <button
           key={filter.id}
           type="button"
           onClick={() => onChange(filter.id)}
-          className={`shrink-0 rounded-md px-2.5 py-1.5 text-xs font-semibold transition-colors ${
+          className={`shrink-0 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors ${
             active === filter.id
-              ? "bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300"
-              : "text-foreground hover:bg-muted"
+              ? "bg-foreground text-background"
+              : "bg-foreground/[0.035] text-muted-foreground hover:bg-foreground/[0.07] hover:text-foreground"
           }`}
         >
           {filter.label}

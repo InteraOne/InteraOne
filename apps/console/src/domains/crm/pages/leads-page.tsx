@@ -1,11 +1,8 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
-  CalendarClock,
-  CalendarDays,
   ChevronLeft,
   ChevronRight,
-  ExternalLink,
   Filter,
   Flame,
   GripVertical,
@@ -13,8 +10,9 @@ import {
   Plus,
   Search,
   Tags,
-  UserRound,
-  Building2,
+  Download,
+  Trash2,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/shared/ui/button";
@@ -44,13 +42,8 @@ import {
   useUpdateCrmRecord,
 } from "../hooks/use-crm-records";
 
-const labelClass = (label: string) => {
-  if (/hot/i.test(label))
-    return "bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-300";
-  if (/warm/i.test(label))
-    return "bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300";
-  return "bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300";
-};
+const labelClass = () =>
+  "border border-border/70 bg-foreground/[0.035] text-muted-foreground";
 
 const money = (value: number, currency: string) =>
   new Intl.NumberFormat(undefined, {
@@ -91,6 +84,13 @@ const formatNextActivity = (value: string) => {
   });
 };
 
+const formatCreatedAt = (value: string) =>
+  new Date(value).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+
 type LeadColumnId =
   | "title"
   | "contact"
@@ -102,26 +102,16 @@ type LeadColumnId =
   | "owner";
 
 const LEAD_COLUMNS: Record<LeadColumnId, { label: string; width: string }> = {
-  title: { label: "Title", width: "minmax(260px,1.3fr)" },
-  contact: { label: "Contact person", width: "minmax(210px,1fr)" },
-  organization: { label: "Organization", width: "minmax(210px,1fr)" },
-  nextActivity: { label: "Next activity", width: "minmax(230px,1.1fr)" },
-  labels: { label: "Labels", width: "minmax(180px,.8fr)" },
-  source: { label: "Source origin", width: "minmax(170px,.8fr)" },
-  created: { label: "Lead created", width: "minmax(210px,1fr)" },
-  owner: { label: "Owner", width: "minmax(190px,.9fr)" },
+  title: { label: "Lead", width: "minmax(280px,1.35fr)" },
+  contact: { label: "Contact person", width: "minmax(240px,1.05fr)" },
+  organization: { label: "Organization", width: "minmax(200px,.95fr)" },
+  nextActivity: { label: "Next activity", width: "minmax(200px,1fr)" },
+  labels: { label: "Labels", width: "minmax(150px,.75fr)" },
+  source: { label: "Source", width: "minmax(150px,.75fr)" },
+  created: { label: "Created", width: "minmax(180px,.9fr)" },
+  owner: { label: "Owner", width: "minmax(180px,.85fr)" },
 };
 const DEFAULT_LEAD_COLUMN_ORDER = Object.keys(LEAD_COLUMNS) as LeadColumnId[];
-
-const leadColumnIcon = (id: LeadColumnId) => {
-  if (id === "title") return Flame;
-  if (id === "contact" || id === "owner") return UserRound;
-  if (id === "organization") return Building2;
-  if (id === "nextActivity") return CalendarClock;
-  if (id === "labels") return Tags;
-  if (id === "source") return ExternalLink;
-  return CalendarDays;
-};
 
 export function LeadsPage() {
   const { data: leads = [], isLoading } = useLeads();
@@ -244,7 +234,6 @@ export function LeadsPage() {
       return matchesLabel && matchesSearch;
     });
   }, [labelFilter, leads, search]);
-  const totalValue = leads.reduce((sum, lead) => sum + lead.value, 0);
   const activeLeadIndex = activeLeadId
     ? filteredLeads.findIndex((lead) => lead.id === activeLeadId)
     : -1;
@@ -369,58 +358,58 @@ export function LeadsPage() {
   };
 
   return (
-    <div ref={pageRef} className="relative space-y-5">
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <div ref={pageRef} className="crm-workspace relative space-y-6 pb-8">
+      <header className="flex flex-col gap-5 border-b border-border/60 pb-5 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <div className="flex items-center gap-2.5">
-            <h1 className="text-2xl font-semibold tracking-tight">Leads</h1>
-            <span className="rounded-md bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+          <p className="mb-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+            CRM · Pipeline
+          </p>
+          <div className="flex items-center gap-3">
+            <h1 className="text-[28px] font-semibold leading-tight tracking-[-0.025em]">
+              Leads
+            </h1>
+            <span className="rounded-full border border-border/70 bg-background px-2.5 py-0.5 text-xs font-medium tabular-nums text-muted-foreground">
               {leads.length}
             </span>
           </div>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Qualify new leads before moving them into deals.
+          <p className="mt-1.5 max-w-xl text-sm text-muted-foreground">
+            Qualify incoming opportunities and keep every next step moving.
           </p>
         </div>
-        <Button onClick={() => setDialogOpen(true)}>
-          <Plus className="mr-2 h-4 w-4" /> Add lead
+        <Button
+          size="lg"
+          className="rounded-lg px-4 shadow-sm"
+          onClick={() => setDialogOpen(true)}
+        >
+          <Plus className="mr-1 h-4 w-4" /> New lead
         </Button>
       </header>
 
-      <div className="grid overflow-hidden rounded-lg border border-border/80 bg-background sm:grid-cols-3 sm:divide-x">
-        {[
-          ["Active leads", String(leads.length)],
-          ["Total value", money(totalValue, leads[0]?.currency || "INR")],
-          [
-            "With close date",
-            String(leads.filter((lead) => lead.expectedCloseAt).length),
-          ],
-        ].map(([label, value]) => (
-          <div
-            key={label}
-            className="flex items-baseline justify-between gap-3 border-b px-4 py-3 last:border-b-0 sm:block sm:border-b-0"
-          >
-            <p className="text-xs font-medium text-muted-foreground">{label}</p>
-            <p className="mt-1 text-base font-semibold tabular-nums">{value}</p>
-          </div>
-        ))}
-      </div>
-
-      <Card className="overflow-hidden">
-        <div className="flex flex-col gap-3 border-b p-4 lg:flex-row lg:items-center">
-          <div className="relative min-w-0 flex-1">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+      <Card className="gap-0 overflow-hidden rounded-xl border border-border/70 bg-card py-0 shadow-[0_1px_2px_rgba(0,0,0,0.03),0_10px_36px_rgba(0,0,0,0.035)] ring-0">
+        <div className="flex flex-col gap-3 border-b border-border/60 p-3 lg:flex-row lg:items-center">
+          <div className="relative min-w-0 flex-1 lg:max-w-xl">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/75" />
             <Input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search leads by title, person, organization, email, or owner"
-              className="bg-muted/25 pl-9"
+              placeholder="Search leads, people, companies, or owners…"
+              className="h-9 border-transparent bg-foreground/[0.035] pl-9 pr-9 shadow-none focus-visible:bg-background"
             />
+            {search && (
+              <button
+                type="button"
+                aria-label="Clear search"
+                onClick={() => setSearch("")}
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-muted-foreground hover:bg-foreground/[0.06] hover:text-foreground"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
           </div>
-          <div className="flex items-center gap-2">
-            <Filter className="h-4 w-4 text-muted-foreground" />
+          <div className="flex flex-1 items-center justify-end gap-2">
+            <Filter className="h-4 w-4 text-muted-foreground/75" />
             <Select value={labelFilter} onValueChange={setLabelFilter}>
-              <SelectTrigger className="w-[180px]">
+              <SelectTrigger className="h-9 w-[180px] border-border/70 bg-background shadow-none">
                 <SelectValue placeholder="All labels" />
               </SelectTrigger>
               <SelectContent>
@@ -435,12 +424,14 @@ export function LeadsPage() {
           </div>
         </div>
         <CardContent className="p-0">
-          <div className="space-y-3 border-b border-border/70 p-4">
+          <div className="space-y-0">
             {selectedLeads.length > 0 && (
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-dashed border-border p-3">
-                <span className="text-sm text-muted-foreground">
-                  {selectedLeads.length} lead
-                  {selectedLeads.length === 1 ? "" : "s"} selected
+              <div className="m-3 mb-0 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-foreground/[0.03] px-3 py-2.5">
+                <span className="flex items-center gap-2 text-sm font-medium">
+                  <span className="flex h-5 min-w-5 items-center justify-center rounded-md bg-primary px-1 text-[11px] text-primary-foreground">
+                    {selectedLeads.length}
+                  </span>
+                  selected
                 </span>
                 <div className="flex flex-wrap gap-2">
                   <Button
@@ -448,26 +439,26 @@ export function LeadsPage() {
                     size="sm"
                     onClick={() => setBulkLabelsOpen(true)}
                   >
-                    Add labels
+                    <Tags className="h-3.5 w-3.5" /> Add labels
                   </Button>
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={exportSelectedLeads}
                   >
-                    Export
+                    <Download className="h-3.5 w-3.5" /> Export
                   </Button>
                   <Button
                     variant="destructive"
                     size="sm"
                     onClick={() => setBulkDeleteOpen(true)}
                   >
-                    Delete
+                    <Trash2 className="h-3.5 w-3.5" /> Delete
                   </Button>
                 </div>
               </div>
             )}
-            <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
+            <div className="flex items-center justify-between gap-3 border-b border-border/60 px-4 py-2.5 text-xs text-muted-foreground">
               <label className="flex cursor-pointer items-center gap-2">
                 <input
                   type="checkbox"
@@ -478,7 +469,7 @@ export function LeadsPage() {
                     )
                   }
                   onChange={toggleSelectPage}
-                  className="cursor-pointer accent-primary"
+                  className="crm-checkbox cursor-pointer"
                 />
                 Select page
               </label>
@@ -487,15 +478,15 @@ export function LeadsPage() {
               </span>
             </div>
           </div>
-          <div className="overflow-x-auto">
-            <div className="min-w-[1720px]">
+          <div className="crm-table-scroll overflow-x-auto">
+            <div className="min-w-[1740px]">
               <div
-                className="grid items-stretch border-b-2 border-primary/20 bg-slate-100/90 text-[11px] font-bold uppercase tracking-[0.08em] text-slate-700 dark:bg-slate-900/80 dark:text-slate-200"
+                className="sticky top-0 z-10 grid items-stretch border-b border-border/70 bg-card/95 text-[11px] font-semibold uppercase tracking-[0.075em] text-muted-foreground backdrop-blur"
                 style={{
                   gridTemplateColumns: `48px ${columnGridTemplate} 48px`,
                 }}
               >
-                <span className="flex items-center justify-center border-r border-border/60">
+                <span className="flex items-center justify-center">
                   <input
                     type="checkbox"
                     aria-label="Select all leads"
@@ -512,11 +503,10 @@ export function LeadsPage() {
                           : [],
                       )
                     }
-                    className="cursor-pointer accent-primary"
+                    className="crm-checkbox cursor-pointer"
                   />
                 </span>
                 {columnOrder.map((columnId, index) => {
-                  const HeaderIcon = leadColumnIcon(columnId);
                   return (
                     <div
                       key={columnId}
@@ -536,10 +526,9 @@ export function LeadsPage() {
                           moveColumn(draggedColumn, index);
                         setDraggedColumn(null);
                       }}
-                      className={`group flex cursor-grab items-center gap-1 border-r border-border/60 px-2 py-3 active:cursor-grabbing ${draggedColumn === columnId ? "bg-primary/10 opacity-60" : "hover:bg-primary/[0.05]"}`}
+                      className={`group flex cursor-grab items-center gap-1.5 px-3 py-3.5 active:cursor-grabbing ${draggedColumn === columnId ? "bg-primary/10 opacity-60" : "hover:bg-foreground/[0.03]"}`}
                     >
-                      <GripVertical className="h-4 w-4 shrink-0 text-muted-foreground/70" />
-                      <HeaderIcon className="h-3.5 w-3.5 shrink-0 text-primary" />
+                      <GripVertical className="h-3.5 w-3.5 shrink-0 text-muted-foreground/35 opacity-0 transition-opacity group-hover:opacity-100" />
                       <span className="min-w-0 flex-1 truncate">
                         {LEAD_COLUMNS[columnId].label}
                       </span>
@@ -566,7 +555,7 @@ export function LeadsPage() {
                     </div>
                   );
                 })}
-                <span className="border-border/60" />
+                <span />
               </div>
 
               <div className="flex flex-col">
@@ -585,12 +574,12 @@ export function LeadsPage() {
                   return (
                     <div
                       key={lead.id}
-                      className={`grid min-h-[68px] border-b border-border/70 last:border-b-0 ${selected || active ? "bg-primary/[0.07] shadow-[inset_3px_0_0_hsl(var(--primary))]" : "hover:bg-muted/30"}`}
+                      className={`grid min-h-[64px] border-b border-border/55 transition-colors last:border-b-0 ${selected || active ? "bg-primary/[0.055] shadow-[inset_2px_0_0_var(--primary)]" : "hover:bg-foreground/[0.025]"}`}
                       style={{
                         gridTemplateColumns: `48px ${columnGridTemplate} 48px`,
                       }}
                     >
-                      <div className="flex items-center justify-center border-r border-border/40">
+                      <div className="flex items-start justify-center pt-4">
                         <input
                           type="checkbox"
                           aria-label={`Select ${lead.title}`}
@@ -602,7 +591,7 @@ export function LeadsPage() {
                                 : [...current, lead.id],
                             )
                           }
-                          className="cursor-pointer accent-primary"
+                          className="crm-checkbox cursor-pointer"
                         />
                       </div>
                       {columnOrder.map((columnId) => (
@@ -610,20 +599,27 @@ export function LeadsPage() {
                           key={columnId}
                           type="button"
                           onClick={() => setActiveLeadId(lead.id)}
-                          className="min-w-0 overflow-hidden border-r border-border/40 px-4 py-3 text-left outline-none hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                          className="flex min-w-0 flex-col items-start justify-start overflow-hidden px-3 py-3 text-left outline-none hover:bg-foreground/[0.025] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                         >
                           {columnId === "title" ? (
-                            <>
-                              <div className="truncate font-semibold text-primary">
+                            <span className="block w-full min-w-0">
+                              <span className="block truncate text-sm font-medium text-foreground">
                                 {lead.title}
-                              </div>
-                              <div className="mt-1 text-xs text-muted-foreground">
+                              </span>
+                              <span className="mt-0.5 block text-xs tabular-nums text-muted-foreground">
                                 {money(lead.value, lead.currency)}
-                              </div>
-                            </>
+                              </span>
+                            </span>
                           ) : columnId === "contact" ? (
-                            <span className="block w-full truncate font-medium">
-                              {lead.contact?.name || "—"}
+                            <span className="block w-full min-w-0">
+                              <span className="block truncate text-sm text-foreground">
+                                {lead.contact?.name || "—"}
+                              </span>
+                              {lead.contact?.email ? (
+                                <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+                                  {lead.contact.email}
+                                </span>
+                              ) : null}
                             </span>
                           ) : columnId === "organization" ? (
                             <span className="block w-full truncate">
@@ -635,30 +631,35 @@ export function LeadsPage() {
                                 className={
                                   new Date(nextActivity.dueAt!).getTime() <
                                   Date.now()
-                                    ? "block w-full truncate font-medium text-red-600 dark:text-red-400"
-                                    : "block w-full truncate font-medium text-emerald-700 dark:text-emerald-300"
+                                    ? "block w-full truncate font-medium text-foreground"
+                                    : "block w-full truncate text-foreground"
                                 }
                               >
                                 {formatNextActivity(nextActivity.dueAt!)}
                               </span>
                             ) : (
-                              <span className="block w-full truncate text-amber-600">
+                              <span className="block w-full truncate text-muted-foreground">
                                 No activity
                               </span>
                             )
                           ) : columnId === "labels" ? (
-                            <span className="flex flex-wrap gap-1">
+                            <span className="flex w-full flex-wrap items-center gap-1">
                               {lead.labels?.length ? (
-                                lead.labels.map((label) => (
+                                lead.labels.slice(0, 2).map((label) => (
                                   <span
                                     key={label}
-                                    className={`rounded px-1.5 py-0.5 text-[10px] font-bold uppercase ${labelClass(label)}`}
+                                    className={`rounded-md px-1.5 py-0.5 text-[10px] font-medium ${labelClass()}`}
                                   >
                                     {label}
                                   </span>
                                 ))
                               ) : (
                                 <span className="text-muted-foreground">—</span>
+                              )}
+                              {(lead.labels?.length || 0) > 2 && (
+                                <span className="text-xs text-muted-foreground">
+                                  +{lead.labels!.length - 2}
+                                </span>
                               )}
                             </span>
                           ) : columnId === "source" ? (
@@ -669,11 +670,11 @@ export function LeadsPage() {
                             </span>
                           ) : columnId === "created" ? (
                             <span className="block w-full truncate text-muted-foreground">
-                              {new Date(lead.createdAt).toLocaleString()}
+                              {formatCreatedAt(lead.createdAt)}
                             </span>
                           ) : (
-                            <span className="flex min-w-0 items-center gap-2 overflow-hidden">
-                              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-muted text-[10px] font-semibold">
+                            <span className="flex w-full min-w-0 items-center gap-2 overflow-hidden">
+                              <span className="flex h-7 w-7 items-center justify-center rounded-full border border-border/70 bg-background text-[10px] font-semibold">
                                 {lead.owner?.name
                                   ?.split(" ")
                                   .map((part) => part[0])
@@ -735,8 +736,10 @@ export function LeadsPage() {
             </div>
           </div>
           {!isLoading && filteredLeads.length === 0 && (
-            <div className="py-16 text-center">
-              <Flame className="mx-auto h-8 w-8 text-muted-foreground" />
+            <div className="m-4 rounded-xl border border-dashed border-border/80 bg-foreground/[0.015] py-14 text-center">
+              <span className="mx-auto flex h-11 w-11 items-center justify-center rounded-xl bg-foreground/[0.05]">
+                <Flame className="h-5 w-5 text-muted-foreground" />
+              </span>
               <p className="mt-3 font-medium">No leads found</p>
               <p className="mt-1 text-sm text-muted-foreground">
                 Add a lead or adjust your search.

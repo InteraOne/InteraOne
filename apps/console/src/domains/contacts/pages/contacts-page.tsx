@@ -44,6 +44,9 @@ import {
   Pencil,
   Phone,
   UserRound,
+  Download,
+  Trash2,
+  X,
 } from "lucide-react";
 import { ContactDialog } from "@/domains/contacts/components/contact-form";
 import {
@@ -163,23 +166,6 @@ const formatDate = (iso: string) =>
     year: "numeric",
   });
 
-const lifecycleStyle = (stage: Contact["lifecycleStage"]) => {
-  if (stage === "customer")
-    return "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300";
-  if (stage === "opportunity")
-    return "border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-900 dark:bg-violet-950/40 dark:text-violet-300";
-  if (stage === "qualified")
-    return "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-300";
-  if (stage === "inactive" || stage === "lost")
-    return "border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300";
-  return "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300";
-};
-
-const isRecentlyActive = (iso: string) => {
-  const diff = Date.now() - new Date(iso).getTime();
-  return diff < 30 * 60 * 1000;
-};
-
 type EditableContactField = "name" | "company" | "email" | "phone" | "ownerId";
 type ContactColumnId =
   | "contact"
@@ -195,14 +181,14 @@ const CONTACT_COLUMNS: Record<
   ContactColumnId,
   { label: string; width: string }
 > = {
-  contact: { label: "Contact", width: "minmax(280px,1.4fr)" },
-  organization: { label: "Organization", width: "minmax(210px,1fr)" },
-  email: { label: "Email", width: "minmax(255px,1.2fr)" },
-  phone: { label: "Phone", width: "minmax(180px,.8fr)" },
-  openDeals: { label: "Open deals", width: "155px" },
-  wonDeals: { label: "Won deals", width: "155px" },
-  nextActivity: { label: "Next activity", width: "minmax(210px,1fr)" },
-  owner: { label: "Owner", width: "minmax(200px,.9fr)" },
+  contact: { label: "Contact", width: "minmax(260px,1.35fr)" },
+  organization: { label: "Organization", width: "minmax(180px,.9fr)" },
+  email: { label: "Email", width: "minmax(220px,1.1fr)" },
+  phone: { label: "Phone", width: "minmax(160px,.75fr)" },
+  openDeals: { label: "Open deals", width: "120px" },
+  wonDeals: { label: "Won deals", width: "120px" },
+  nextActivity: { label: "Next activity", width: "minmax(180px,.9fr)" },
+  owner: { label: "Owner", width: "minmax(190px,.9fr)" },
 };
 const DEFAULT_CONTACT_COLUMN_ORDER = Object.keys(
   CONTACT_COLUMNS,
@@ -260,7 +246,7 @@ function EditableContactCell({
 
   return (
     <div
-      className={`relative h-full min-w-0 border-r border-border/40 ${className || ""}`}
+      className={`relative h-full w-full min-w-0 ${className || ""}`}
       style={{ order }}
     >
       {onOpenContact ? (
@@ -271,7 +257,7 @@ function EditableContactCell({
               event.stopPropagation();
               onOpenContact();
             }}
-            className="min-w-0 flex-1 rounded px-1 py-1 text-left outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+            className="min-w-0 flex-1 rounded-md px-1 py-1 text-left outline-none hover:bg-foreground/[0.035] focus-visible:ring-2 focus-visible:ring-ring"
             title="Open contact details"
           >
             {children}
@@ -279,7 +265,7 @@ function EditableContactCell({
           <button
             type="button"
             onClick={(event) => onEdit(event, contact, field)}
-            className="shrink-0 rounded p-1 text-muted-foreground opacity-0 outline-none transition-opacity hover:bg-muted hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"
+            className="shrink-0 rounded-md p-1 text-muted-foreground opacity-0 outline-none transition-opacity hover:bg-foreground/[0.06] hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"
             title={`Edit ${label}`}
           >
             <Pencil className="h-3.5 w-3.5" />
@@ -289,7 +275,7 @@ function EditableContactCell({
         <button
           type="button"
           onClick={(event) => onEdit(event, contact, field)}
-          className="group flex h-full w-full min-w-0 items-center gap-1 rounded px-1 py-1 text-left outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+          className="group flex h-full w-full min-w-0 items-center gap-1 rounded-md px-1 py-1 text-left outline-none hover:bg-foreground/[0.035] focus-visible:ring-2 focus-visible:ring-ring"
           title={`Edit ${label}`}
         >
           {children}
@@ -299,7 +285,7 @@ function EditableContactCell({
 
       {isEditing && (
         <form
-          className={`absolute z-50 w-64 rounded-xl border border-border bg-background p-3 shadow-xl ${
+          className={`absolute z-50 w-64 rounded-xl border border-border/70 bg-popover p-3 shadow-2xl ${
             field === "ownerId"
               ? "right-1 top-full mt-1"
               : "left-1 top-full mt-1"
@@ -733,25 +719,30 @@ export function ContactsPage() {
   };
 
   return (
-    <div className="space-y-5">
+    <div className="crm-workspace space-y-6 pb-8">
       <header
-        className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
+        className="flex flex-col gap-5 border-b border-border/60 pb-5 sm:flex-row sm:items-end sm:justify-between"
         data-tour-id="page-contacts-heading"
       >
         <div className="min-w-0">
-          <div className="flex items-center gap-2.5">
-            <h1 className="text-2xl font-semibold tracking-tight">Contacts</h1>
+          <p className="mb-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+            CRM · People
+          </p>
+          <div className="flex items-center gap-3">
+            <h1 className="text-[28px] font-semibold leading-tight tracking-[-0.025em]">
+              Contacts
+            </h1>
             {!isLoadingContacts && (
-              <span className="rounded-md bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+              <span className="rounded-full border border-border/70 bg-background px-2.5 py-0.5 text-xs font-medium tabular-nums text-muted-foreground">
                 {totalItems}
               </span>
             )}
           </div>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Manage people, organizations, and customer relationships.
+          <p className="mt-1.5 max-w-xl text-sm text-muted-foreground">
+            A single view of every relationship, conversation, and next step.
           </p>
           {loadError && (
-            <p className="mt-1.5 text-xs text-amber-600">
+            <p className="mt-1.5 text-xs text-muted-foreground">
               Contacts could not be refreshed: {loadError}
             </p>
           )}
@@ -762,9 +753,12 @@ export function ContactsPage() {
             onSubmit={handleAddContact}
             triggerType="custom"
             customTrigger={
-              <Button className="w-full cursor-pointer sm:w-auto">
-                <Plus className="mr-2 h-4 w-4" />
-                Add contact
+              <Button
+                size="lg"
+                className="w-full cursor-pointer rounded-lg px-4 shadow-sm sm:w-auto"
+              >
+                <Plus className="mr-1 h-4 w-4" />
+                New contact
               </Button>
             }
           />
@@ -772,38 +766,44 @@ export function ContactsPage() {
       </header>
 
       <Card
-        className="min-w-0 overflow-hidden"
+        className="min-w-0 gap-0 overflow-hidden rounded-xl border border-border/70 bg-card py-0 shadow-[0_1px_2px_rgba(0,0,0,0.03),0_10px_36px_rgba(0,0,0,0.035)] ring-0"
         data-tour-id="page-contacts-list"
       >
-        <CardHeader className="space-y-0 border-b p-0">
-          <div className="flex flex-col gap-3 p-4 lg:flex-row lg:items-center">
-            <div className="flex min-w-[130px] items-center gap-2 font-semibold">
-              <Users className="h-4 w-4 text-primary" />
-              <span>{totalItems} contacts</span>
-            </div>
+        <CardHeader className="space-y-0 border-b border-border/60 p-0">
+          <div className="flex flex-col gap-3 p-3 lg:flex-row lg:items-center">
             <div
-              className="relative min-w-0 flex-1"
+              className="relative min-w-0 flex-1 lg:max-w-xl"
               data-tour-id="page-contacts-search"
             >
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/75" />
               <Input
-                placeholder="Search contacts by name, email, phone, or organization"
+                placeholder="Search people, email, phone, or company…"
                 value={searchValue}
                 onChange={(event) => setSearchValue(event.target.value)}
-                className="h-10 cursor-text bg-muted/30 pl-10"
+                className="h-9 cursor-text border-transparent bg-foreground/[0.035] pl-9 pr-9 shadow-none focus-visible:bg-background"
               />
+              {searchValue && (
+                <button
+                  type="button"
+                  aria-label="Clear search"
+                  onClick={() => setSearchValue("")}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-muted-foreground hover:bg-foreground/[0.06] hover:text-foreground"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-1 items-center justify-end gap-2">
               <Button
                 type="button"
                 variant={
                   filtersExpanded || activeFilterCount ? "secondary" : "outline"
                 }
-                className="relative flex-1 cursor-pointer lg:flex-none"
+                className="relative h-9 flex-1 cursor-pointer border-border/70 bg-background lg:flex-none"
                 onClick={() => setFiltersExpanded((current) => !current)}
                 aria-expanded={filtersExpanded}
               >
-                <SlidersHorizontal className="mr-2 h-4 w-4" />
+                <SlidersHorizontal className="mr-1 h-4 w-4" />
                 Filters
                 {activeFilterCount > 0 && (
                   <span className="ml-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[11px] text-primary-foreground">
@@ -812,7 +812,7 @@ export function ContactsPage() {
                 )}
               </Button>
               <Select value={sortValue} onValueChange={setSortValue}>
-                <SelectTrigger className="w-[190px] cursor-pointer">
+                <SelectTrigger className="h-9 w-[180px] cursor-pointer border-border/70 bg-background shadow-none">
                   <SelectValue placeholder="Sort by" />
                 </SelectTrigger>
                 <SelectContent>
@@ -828,7 +828,7 @@ export function ContactsPage() {
 
           {filtersExpanded && (
             <div
-              className="border-t bg-muted/20 p-4"
+              className="border-t border-border/60 bg-foreground/[0.018] p-4"
               data-tour-id="page-contacts-filters"
             >
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
@@ -983,17 +983,17 @@ export function ContactsPage() {
             </div>
           )}
         </CardHeader>
-        <CardContent className="space-y-4 p-4 sm:p-5">
+        <CardContent className="space-y-0 p-0">
           {conflicts.length > 0 && (
             <button
               onClick={() => {
                 setFocusedConflictContactId(null);
                 setIsConflictSheetOpen(true);
               }}
-              className="w-full bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 rounded-lg p-3 flex items-center justify-between text-sm text-amber-800 dark:text-amber-300 hover:bg-amber-100/50 dark:hover:bg-amber-950/30 transition-colors cursor-pointer font-medium"
+              className="m-3 mb-0 flex w-[calc(100%-1.5rem)] cursor-pointer items-center justify-between rounded-lg border border-border/70 bg-foreground/[0.025] p-3 text-sm font-medium text-foreground transition-colors hover:bg-foreground/[0.05]"
             >
               <div className="flex items-center gap-2">
-                <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-500" />
+                <AlertTriangle className="h-4 w-4 text-muted-foreground" />
                 <span>{conflicts.length} Pending Profile Conflicts</span>
               </div>
               <span className="text-xs underline">Review conflicts</span>
@@ -1001,9 +1001,12 @@ export function ContactsPage() {
           )}
 
           {selectedContacts.length > 0 && (
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-dashed border-border p-3">
-              <div className="text-sm text-muted-foreground">
-                {selectedContacts.length} contacts selected
+            <div className="m-3 mb-0 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-foreground/[0.03] px-3 py-2.5">
+              <div className="flex items-center gap-2 text-sm font-medium">
+                <span className="flex h-5 min-w-5 items-center justify-center rounded-md bg-primary px-1 text-[11px] text-primary-foreground">
+                  {selectedContacts.length}
+                </span>
+                selected
               </div>
               <div className="flex flex-wrap gap-2">
                 <Button
@@ -1012,7 +1015,7 @@ export function ContactsPage() {
                   onClick={() => setIsBulkTagDialogOpen(true)}
                   className="cursor-pointer"
                 >
-                  Add tags
+                  <Tag className="h-3.5 w-3.5" /> Add tags
                 </Button>
                 <Button
                   variant="outline"
@@ -1020,7 +1023,7 @@ export function ContactsPage() {
                   onClick={handleBulkExport}
                   className="cursor-pointer"
                 >
-                  Export
+                  <Download className="h-3.5 w-3.5" /> Export
                 </Button>
                 <Button
                   variant="destructive"
@@ -1028,13 +1031,13 @@ export function ContactsPage() {
                   onClick={() => setIsDeleteDialogOpen(true)}
                   className="cursor-pointer"
                 >
-                  Delete
+                  <Trash2 className="h-3.5 w-3.5" /> Delete
                 </Button>
               </div>
             </div>
           )}
 
-          <div className="flex items-center justify-between text-xs text-muted-foreground">
+          <div className="flex items-center justify-between border-b border-border/60 px-4 py-2.5 text-xs text-muted-foreground">
             <label className="flex items-center gap-2 cursor-pointer">
               <input
                 type="checkbox"
@@ -1045,7 +1048,7 @@ export function ContactsPage() {
                   )
                 }
                 onChange={toggleSelectAll}
-                className="accent-primary cursor-pointer"
+                className="crm-checkbox cursor-pointer"
               />
               Select page
             </label>
@@ -1054,30 +1057,14 @@ export function ContactsPage() {
             </span>
           </div>
 
-          <div className="overflow-x-auto rounded-xl border border-border/80 bg-background shadow-sm">
-            <div className="min-w-[1720px]">
+          <div className="crm-table-scroll overflow-x-auto bg-background">
+            <div className="min-w-[1540px]">
               <div
-                className="grid items-stretch border-b-2 border-primary/20 bg-slate-100/90 text-[11px] font-bold uppercase tracking-[0.08em] text-slate-700 dark:bg-slate-900/80 dark:text-slate-200"
+                className="sticky top-0 z-10 grid items-stretch border-b border-border/70 bg-card/95 text-[11px] font-semibold uppercase tracking-[0.075em] text-muted-foreground backdrop-blur"
                 style={{ gridTemplateColumns: `48px ${columnGridTemplate}` }}
               >
-                <span className="border-r border-border/60 px-4 py-4" />
+                <span className="px-4 py-3.5" />
                 {columnOrder.map((columnId, index) => {
-                  const HeaderIcon =
-                    columnId === "contact"
-                      ? UserRound
-                      : columnId === "organization"
-                        ? Building2
-                        : columnId === "email"
-                          ? Mail
-                          : columnId === "phone"
-                            ? Phone
-                            : columnId === "openDeals"
-                              ? CircleDotDashed
-                              : columnId === "wonDeals"
-                                ? CircleCheckBig
-                                : columnId === "nextActivity"
-                                  ? CalendarClock
-                                  : UserRound;
                   return (
                     <div
                       key={columnId}
@@ -1097,10 +1084,9 @@ export function ContactsPage() {
                           moveColumn(draggedColumn, index);
                         setDraggedColumn(null);
                       }}
-                      className={`group flex cursor-grab items-center gap-1 border-r border-border/60 px-2 py-3 last:border-r-0 active:cursor-grabbing ${draggedColumn === columnId ? "bg-primary/10 opacity-60" : "hover:bg-primary/[0.05]"}`}
+                      className={`group flex cursor-grab items-center gap-1.5 px-3 py-3.5 active:cursor-grabbing ${draggedColumn === columnId ? "bg-primary/10 opacity-60" : "hover:bg-foreground/[0.03]"}`}
                     >
-                      <GripVertical className="h-4 w-4 shrink-0 text-muted-foreground/70" />
-                      <HeaderIcon className="h-3.5 w-3.5 shrink-0 text-primary" />
+                      <GripVertical className="h-3.5 w-3.5 shrink-0 text-muted-foreground/35 opacity-0 transition-opacity group-hover:opacity-100" />
                       <span className="min-w-0 flex-1 truncate">
                         {CONTACT_COLUMNS[columnId].label}
                       </span>
@@ -1139,23 +1125,23 @@ export function ContactsPage() {
                   return (
                     <div
                       key={contact.id}
-                      className={`relative grid min-h-[68px] grid-cols-[48px_minmax(0,1fr)] text-left transition-all select-none border-b border-border/70 last:border-b-0 ${
+                      className={`relative grid min-h-[64px] grid-cols-[48px_minmax(0,1fr)] border-b border-border/55 text-left transition-colors select-none last:border-b-0 ${
                         isSelected
-                          ? "bg-primary/[0.07] shadow-[inset_3px_0_0_hsl(var(--primary))]"
-                          : "hover:bg-muted/30"
+                          ? "bg-primary/[0.055] shadow-[inset_2px_0_0_var(--primary)]"
+                          : "hover:bg-foreground/[0.025]"
                       }`}
                     >
-                      <div className="flex items-center justify-center border-r border-border/40 px-3 py-4">
+                      <div className="flex items-center justify-center px-3 py-3">
                         <input
                           type="checkbox"
                           aria-label={`Select ${contact.name} for bulk actions`}
                           checked={selectedContacts.includes(contact.id)}
                           onChange={() => toggleBulkSelect(contact.id)}
-                          className="accent-primary cursor-pointer"
+                          className="crm-checkbox cursor-pointer"
                         />
                       </div>
                       <div
-                        className="grid min-w-0 text-left"
+                        className="grid min-w-0 items-stretch text-left"
                         style={{ gridTemplateColumns: columnGridTemplate }}
                       >
                         <EditableContactCell
@@ -1176,58 +1162,25 @@ export function ContactsPage() {
                           saving={updateContactMutation.isPending}
                           ownerOptions={ownerOptions}
                           order={columnPosition("contact")}
-                          className="min-w-0 px-4 py-3"
+                          className="min-w-0 px-3 py-2.5"
                         >
-                          <div className="flex min-w-0 items-center gap-3">
-                            <div className="relative shrink-0">
-                              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-primary to-primary/70 text-sm font-semibold text-primary-foreground shadow-sm">
-                                {contact.name
-                                  .split(" ")
-                                  .map((part) => part[0])
-                                  .join("")
-                                  .slice(0, 2)
-                                  .toUpperCase()}
-                              </div>
-                              <span
-                                className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-background ${contact.isOnline ? "bg-emerald-500" : isRecentlyActive(contact.lastActivity) ? "bg-amber-400" : "bg-slate-300 dark:bg-slate-600"}`}
-                                title={
-                                  contact.isOnline
-                                    ? "Online"
-                                    : "Recently active"
-                                }
-                              />
-                            </div>
-                            <div className="min-w-0">
-                              <h3 className="truncate font-semibold text-foreground">
+                          <div className="min-w-0">
+                            <div className="flex min-w-0 items-center gap-1.5">
+                              <h3 className="truncate text-sm font-medium text-foreground">
                                 {contact.name}
                               </h3>
-                              <div className="mt-1 flex items-center gap-1.5">
-                                <Badge
-                                  variant="outline"
-                                  className={`h-5 px-1.5 text-[10px] font-medium capitalize ${lifecycleStyle(contact.lifecycleStage)}`}
-                                >
-                                  {contact.lifecycleStage}
-                                </Badge>
-                                {contact.tags.slice(0, 1).map((tag) => (
-                                  <span
-                                    key={tag}
-                                    className="max-w-20 truncate rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground"
-                                  >
-                                    {tag}
-                                  </span>
-                                ))}
-                              </div>
+                              {contact.conflicts &&
+                                contact.conflicts.length > 0 && (
+                                  <AlertTriangle
+                                    className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+                                    aria-label="Profile conflict"
+                                  />
+                                )}
                             </div>
-                            {contact.conflicts &&
-                              contact.conflicts.length > 0 && (
-                                <Badge
-                                  variant="outline"
-                                  className="bg-amber-500/10 text-amber-600 dark:text-amber-500 border-amber-500/20 text-[10px] py-0 px-1 font-medium flex items-center gap-0.5"
-                                >
-                                  <AlertTriangle className="h-3 w-3" />
-                                  Conflict
-                                </Badge>
-                              )}
+                            <p className="mt-0.5 truncate text-xs capitalize text-muted-foreground">
+                              {contact.lifecycleStage}
+                              {contact.tags[0] ? ` · ${contact.tags[0]}` : ""}
+                            </p>
                           </div>
                         </EditableContactCell>
                         <EditableContactCell
@@ -1245,9 +1198,9 @@ export function ContactsPage() {
                           saving={updateContactMutation.isPending}
                           ownerOptions={ownerOptions}
                           order={columnPosition("organization")}
-                          className="flex min-w-0 items-center gap-2 px-4 py-3 text-sm text-muted-foreground"
+                          className="flex min-w-0 items-center gap-2 px-3 py-2.5 text-sm text-muted-foreground"
                         >
-                          <Building2 className="h-4 w-4 shrink-0 text-indigo-500" />
+                          <Building2 className="h-3.5 w-3.5 shrink-0 text-muted-foreground/55" />
                           <span className="truncate" title={contact.company}>
                             {contact.company || "—"}
                           </span>
@@ -1267,9 +1220,9 @@ export function ContactsPage() {
                           saving={updateContactMutation.isPending}
                           ownerOptions={ownerOptions}
                           order={columnPosition("email")}
-                          className="flex min-w-0 items-center gap-2 px-4 py-3 text-sm text-muted-foreground"
+                          className="flex min-w-0 items-center gap-2 px-3 py-2.5 text-sm text-muted-foreground"
                         >
-                          <Mail className="h-4 w-4 shrink-0 text-rose-500" />
+                          <Mail className="h-3.5 w-3.5 shrink-0 text-muted-foreground/55" />
                           <span className="truncate" title={contact.email}>
                             {contact.email || "—"}
                           </span>
@@ -1289,38 +1242,36 @@ export function ContactsPage() {
                           saving={updateContactMutation.isPending}
                           ownerOptions={ownerOptions}
                           order={columnPosition("phone")}
-                          className="flex min-w-0 items-center gap-2 px-4 py-3 text-sm text-muted-foreground"
+                          className="flex min-w-0 items-center gap-2 px-3 py-2.5 text-sm text-muted-foreground"
                         >
-                          <Phone className="h-4 w-4 shrink-0 text-sky-600" />
+                          <Phone className="h-3.5 w-3.5 shrink-0 text-muted-foreground/55" />
                           <span className="truncate">
                             {contact.phone || "—"}
                           </span>
                         </EditableContactCell>
                         <div
-                          className="flex items-center border-r border-border/40 px-4 py-3 text-sm"
+                          className="flex items-center px-3 py-2.5 text-sm"
                           style={{ order: columnPosition("openDeals") }}
                         >
-                          <span className="inline-flex min-w-12 items-center justify-center gap-1.5 rounded-full bg-sky-50 px-2 py-1 font-semibold text-sky-700 dark:bg-sky-950/40 dark:text-sky-300">
-                            <CircleDotDashed className="h-3.5 w-3.5" />
+                          <span className="inline-flex items-center gap-1.5 font-medium tabular-nums text-foreground">
+                            <CircleDotDashed className="h-3.5 w-3.5 text-muted-foreground" />
                             {dealCounts.open}
                           </span>
                         </div>
                         <div
-                          className="flex items-center border-r border-border/40 px-4 py-3 text-sm"
+                          className="flex items-center px-3 py-2.5 text-sm"
                           style={{ order: columnPosition("wonDeals") }}
                         >
-                          <span className="inline-flex min-w-12 items-center justify-center gap-1.5 rounded-full bg-emerald-50 px-2 py-1 font-semibold text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
-                            <CircleCheckBig className="h-3.5 w-3.5" />
+                          <span className="inline-flex items-center gap-1.5 font-medium tabular-nums text-foreground">
+                            <CircleCheckBig className="h-3.5 w-3.5 text-muted-foreground" />
                             {dealCounts.closed}
                           </span>
                         </div>
                         <div
-                          className="flex min-w-0 items-center border-r border-border/40 px-4 py-3 text-sm text-muted-foreground"
+                          className="flex min-w-0 items-center px-3 py-2.5 text-sm text-muted-foreground"
                           style={{ order: columnPosition("nextActivity") }}
                         >
-                          <span
-                            className={`inline-flex max-w-full items-center gap-2 rounded-full px-2.5 py-1 ${contact.nextFollowUpAt ? "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300" : "bg-muted/70"}`}
-                          >
+                          <span className="inline-flex max-w-full items-center gap-2 text-muted-foreground">
                             <CalendarClock className="h-3.5 w-3.5 shrink-0" />
                             <span className="truncate">
                               {contact.nextFollowUpAt
@@ -1344,20 +1295,26 @@ export function ContactsPage() {
                           saving={updateContactMutation.isPending}
                           ownerOptions={ownerOptions}
                           order={columnPosition("owner")}
-                          className="min-w-0 px-4 py-3 text-sm text-muted-foreground"
+                          className="min-w-0 px-3 py-2.5 text-sm text-muted-foreground"
                         >
-                          <span className="flex min-w-0 items-center gap-2">
-                            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-semibold text-muted-foreground">
-                              {contact.owner?.name
-                                ? contact.owner.name
-                                    .split(" ")
-                                    .map((part) => part[0])
-                                    .join("")
-                                    .slice(0, 2)
-                                    .toUpperCase()
-                                : "—"}
-                            </span>
-                            <span className="truncate font-medium text-foreground">
+                          <span className="flex w-full min-w-0 items-center gap-2">
+                            {contact.owner?.name ? (
+                              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border/70 bg-background text-[10px] font-semibold text-muted-foreground">
+                                {contact.owner.name
+                                  .split(" ")
+                                  .map((part) => part[0])
+                                  .join("")
+                                  .slice(0, 2)
+                                  .toUpperCase()}
+                              </span>
+                            ) : (
+                              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-foreground/[0.04] text-muted-foreground/60">
+                                <UserRound className="h-3.5 w-3.5" />
+                              </span>
+                            )}
+                            <span
+                              className={`truncate font-medium ${contact.owner?.name ? "text-foreground" : "text-muted-foreground"}`}
+                            >
                               {contact.owner?.name || "Unassigned"}
                             </span>
                           </span>
@@ -1371,8 +1328,10 @@ export function ContactsPage() {
           </div>
 
           {!isLoadingContacts && displayedContacts.length === 0 && (
-            <div className="rounded-lg border border-dashed p-8 text-center">
-              <Users className="mx-auto mb-3 h-8 w-8 text-muted-foreground" />
+            <div className="m-4 rounded-xl border border-dashed border-border/80 bg-foreground/[0.015] p-12 text-center">
+              <span className="mx-auto mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-foreground/[0.05]">
+                <Users className="h-5 w-5 text-muted-foreground" />
+              </span>
               <p className="font-medium">No contacts found</p>
               <p className="mt-1 text-sm text-muted-foreground">
                 {hasActiveFilters
@@ -1394,7 +1353,7 @@ export function ContactsPage() {
           )}
 
           {totalPages > 1 && (
-            <div className="pt-4 border-t border-border">
+            <div className="border-t border-border/60 px-4 py-3">
               <Pagination>
                 <PaginationContent>
                   <PaginationItem className="cursor-pointer">
@@ -1511,7 +1470,7 @@ export function ContactsPage() {
         <DialogContent className="sm:max-w-[600px] max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-amber-500" />
+              <AlertTriangle className="h-5 w-5 text-muted-foreground" />
               Pending Profile Conflicts
             </DialogTitle>
             <DialogDescription>
@@ -1559,10 +1518,10 @@ export function ContactsPage() {
                     </span>
                   </div>
                   <div>
-                    <span className="text-xs text-amber-600 dark:text-amber-500 block mb-1">
+                    <span className="mb-1 block text-xs text-muted-foreground">
                       Proposed Value
                     </span>
-                    <span className="font-medium text-amber-600 dark:text-amber-500 block truncate">
+                    <span className="block truncate font-medium text-foreground">
                       {conflict.proposedValue}
                     </span>
                   </div>
@@ -1596,7 +1555,7 @@ export function ContactsPage() {
                       onClick={() =>
                         handleResolveConflict(conflict.id, "apply")
                       }
-                      className="cursor-pointer text-xs bg-amber-500 hover:bg-amber-600 text-white border-0"
+                      className="cursor-pointer border-0 bg-primary text-xs text-primary-foreground hover:bg-primary/85"
                     >
                       Apply Proposed
                     </Button>

@@ -19,7 +19,6 @@ import {
   SquareCheckBig,
   Settings2,
   Target,
-  TrendingUp,
   UserRound,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -174,7 +173,6 @@ export function PipelinePage() {
   const [typeFilter, setTypeFilter] = useState<"all" | PipelineStageType>(
     "all",
   );
-  const [currentTime] = useState(() => Date.now());
   const wasDragging = useRef(false);
 
   const stages = useMemo(() => pipeline?.stages || [], [pipeline?.stages]);
@@ -208,36 +206,6 @@ export function PipelinePage() {
       return searchMatch && ownerMatch && typeMatch;
     });
   }, [deals, ownerFilter, search, stageMap, typeFilter]);
-
-  const metrics = useMemo(() => {
-    const open = deals.filter(
-      (item) => stageMap.get(item.stage)?.type === "open",
-    );
-    const won = deals.filter(
-      (item) => stageMap.get(item.stage)?.type === "won",
-    ).length;
-    const lost = deals.filter(
-      (item) => stageMap.get(item.stage)?.type === "lost",
-    ).length;
-    const totals = new Map<CrmRecord["currency"], number>();
-    open.forEach((item) =>
-      totals.set(item.currency, (totals.get(item.currency) || 0) + item.value),
-    );
-    const closed = won + lost;
-    return {
-      open: open.length,
-      value:
-        Array.from(totals.entries())
-          .map(([currency, value]) => formatMoney(value, currency))
-          .join(" · ") || formatMoney(0, "USD"),
-      winRate: closed ? Math.round((won / closed) * 100) : 0,
-      overdue: open.filter(
-        (item) =>
-          item.expectedCloseAt &&
-          new Date(item.expectedCloseAt).getTime() < currentTime,
-      ).length,
-    };
-  }, [currentTime, deals, stageMap]);
 
   const openCreate = () => {
     setCreateOpen(true);
@@ -341,39 +309,6 @@ export function PipelinePage() {
           <Plus className="mr-2 h-4 w-4" /> New deal
         </Button>
       </header>
-
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {[
-          { label: "Open deals", value: metrics.open, icon: Target },
-          {
-            label: "Open deal value",
-            value: metrics.value,
-            icon: CircleDollarSign,
-          },
-          { label: "Win rate", value: `${metrics.winRate}%`, icon: TrendingUp },
-          {
-            label: "Overdue close dates",
-            value: metrics.overdue,
-            icon: CalendarDays,
-          },
-        ].map((metric) => (
-          <Card key={metric.label}>
-            <CardContent className="flex items-center justify-between p-4">
-              <div>
-                <p className="text-xs font-medium text-muted-foreground">
-                  {metric.label}
-                </p>
-                <p className="mt-1 text-xl font-semibold tracking-tight">
-                  {metric.value}
-                </p>
-              </div>
-              <div className="rounded-lg bg-primary/10 p-2.5 text-primary">
-                <metric.icon className="h-5 w-5" />
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
 
       <Card>
         <CardContent className="flex flex-wrap items-center gap-3 p-3">
