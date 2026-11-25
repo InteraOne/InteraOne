@@ -127,6 +127,13 @@ export async function runPipeline(job: AIJobData): Promise<void> {
       }
 
       if (evidence.length === 0 && !preCheck.customActions?.tools.length) {
+        if (channel === "threads" && job.fallbackToAgent !== false) {
+          await InternalApiService.escalateConversation(conversationId, {
+            organizationId: job.organizationId,
+            reason: "No documented answer was found",
+          });
+          return;
+        }
         await publishResponse({
           conversationId,
           messageId: job.messageId,

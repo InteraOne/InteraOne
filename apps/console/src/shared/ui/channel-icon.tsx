@@ -1,4 +1,5 @@
 import type { SVGProps } from "react";
+import { MessagesSquare } from "lucide-react";
 
 type ChannelIconProps = SVGProps<SVGSVGElement> & {
   channel: string;
@@ -76,6 +77,7 @@ export function AllChannelsIcon(props: IconProps) {
 export function ChannelIcon({ channel, ...props }: ChannelIconProps) {
   const normalized = channel.toLowerCase().replace(/_channel$/, "");
 
+  if (normalized === "threads") return <MessagesSquare {...props} />;
   if (normalized.includes("email")) return <EmailIcon {...props} />;
   if (normalized.includes("whatsapp")) return <WhatsAppIcon {...props} />;
   if (normalized.includes("telegram")) return <TelegramIcon {...props} />;

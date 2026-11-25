@@ -1,3 +1,4 @@
+import { handoffThread } from "@modules/threads/handoff";
 import { redisClient } from "@shared/infra/redis";
 import { Conversation, Message, User, Membership } from "@shared/models";
 import { ChannelService } from "@modules/channels/channels.service";
@@ -82,6 +83,9 @@ export async function startAIResponseConsumer(): Promise<void> {
       );
 
       if (usageResult.blocked) {
+        if (conv.channel === "threads") {
+          await handoffThread(organizationId, conversationId, "AI support quota reached");
+        }
         logger.warn(
           `[AI Response] Message limit reached for org=${organizationId} (used=${usageResult.used} limit=${usageResult.limit}) — dropping AI response`,
         );
@@ -92,6 +96,18 @@ export async function startAIResponseConsumer(): Promise<void> {
           upgradeRequired: true,
         });
         return;
+      }
+
+      if (conv.channel === "threads") {
+        const open = await Conversation.exists({
+          _id: conv._id,
+          organizationId,
+          status: "open",
+          assignedTo: null,
+          "metadata.escalatedAt": null,
+          "metadata.humanJoinedAt": null,
+        });
+        if (!open) return;
       }
 
       const msg = new Message({
@@ -107,6 +123,10 @@ export async function startAIResponseConsumer(): Promise<void> {
         },
       });
       await msg.save();
+      if (conv.channel === "threads") {
+        await Conversation.updateOne({ _id: conv._id, organizationId }, { $currentDate: { updatedAt: true } });
+        socketService.emitToOrg(organizationId, "thread_activity", { conversationId });
+      }
 
       // Forward AI response to external channels if applicable
       ChannelService.sendConversationReply(

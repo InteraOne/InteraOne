@@ -53,6 +53,9 @@ export const gatekeeperMiddleware = (socket: any) => {
             return next(new Error("Conversation not found"));
           }
 
+          if (socket.data.user.isWidget && gateState.interactionSource === "threads") {
+            return next(new Error("Conversation not found"));
+          }
           if (gateState.organizationId !== orgId.toString()) {
             logger.warn(
               `Unauthorized conversation access attempt: user org=${orgId}, conversation org=${gateState.organizationId}`,

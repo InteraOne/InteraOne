@@ -73,7 +73,7 @@ export class SocketManager {
         .catch(() => { });
 
       // Join rooms
-      socket.join(`org:${orgId}`);
+      if (!isWidget) socket.join(`org:${orgId}`);
       socket.join(`user:${userId}`);
 
       // Register packet-level authorization and cache middleware

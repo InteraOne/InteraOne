@@ -7,6 +7,12 @@ export interface IOrganization extends Document {
   plan: "free" | "pro" | "proplus";
   logoUrl?: string;
   whiteLabelEnabled: boolean;
+  threadsEnabled?: boolean;
+  threadsAiEnabled?: boolean;
+  threadsTitle?: string;
+  threadsAccent?: string;
+  threadsLogoUrl?: string;
+  threadsLogoKey?: string;
 
   /** Separate billing contact email (can differ from owner account email) */
   billingEmail?: string;
@@ -50,6 +56,12 @@ const organizationSchema = new Schema<IOrganization>(
     cancelAtPeriodEnd: { type: Boolean, default: false },
     logoUrl: { type: String, default: null },
     whiteLabelEnabled: { type: Boolean, default: false },
+    threadsEnabled: { type: Boolean, default: false },
+    threadsAiEnabled: { type: Boolean, default: false },
+    threadsTitle: { type: String, trim: true, maxlength: 80 },
+    threadsLogoUrl: { type: String, maxlength: 2048 },
+    threadsLogoKey: { type: String, maxlength: 1024 },
+    threadsAccent: { type: String, match: /^#[0-9a-f]{6}$/i },
 
     isActive: { type: Boolean, default: true },
   },

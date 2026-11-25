@@ -10,7 +10,7 @@ import type {
 class ConversationsApi {
   async getConversations(
     status?: string,
-    options?: { assignedToMe?: boolean; unassigned?: boolean },
+    options?: { assignedToMe?: boolean; unassigned?: boolean; channel?: "threads" },
   ): Promise<ConversationsResponse> {
     const params = new URLSearchParams();
     if (status && status !== "all") {
@@ -18,6 +18,7 @@ class ConversationsApi {
     }
     if (options?.assignedToMe) params.set("assignedToMe", "true");
     if (options?.unassigned) params.set("unassigned", "true");
+    if (options?.channel) params.set("channel", options.channel);
 
     const suffix = params.toString();
     return apiClient.get<ConversationsResponse>(

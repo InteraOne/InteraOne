@@ -9,6 +9,7 @@ import {
   CircleHelp,
   CreditCard,
   Inbox,
+  MessagesSquare,
   Crown,
   LogOut,
   Maximize2,
@@ -86,6 +87,7 @@ const getBreadcrumbIcon = (path: string, label: string): LucideIcon | null => {
     path.startsWith("/dashboard/contacts")
   )
     return Users2;
+  if (path.startsWith("/dashboard/threads")) return MessagesSquare;
   if (path.startsWith("/dashboard/channels")) return Radio;
   if (path.startsWith("/dashboard/integrations")) return Plug;
   if (path.startsWith("/dashboard/custom-actions")) return Bolt;
@@ -154,16 +156,18 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const { data: convResponse } = useConversationDetail(conversationId || "");
   const { data: ticketDetail } = useTicket(ticketId);
 
-  const customerName = useMemo(() => {
+  const isThreadConversation = convResponse?.data?.conversation?.channel === "threads";
+  const conversationLabel = useMemo(() => {
     if (!convResponse?.data?.conversation) return "Customer";
     const c = convResponse.data.conversation;
+    if (isThreadConversation && c.subject) return c.subject;
     return (
       c.metadata?.customer?.name ||
       c.metadata?.customerName ||
       c.metadata?.senderName ||
       "Anonymous Visitor"
     );
-  }, [convResponse]);
+  }, [convResponse, isThreadConversation]);
 
   const ticketTitle = useMemo(() => {
     return ticketDetail?.title || "Ticket Details";
@@ -293,6 +297,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         { label: "Knowledge Static", to: "/dashboard/knowledge/static" },
         { label: "Knowledge Realtime", to: "/dashboard/knowledge/realtime" },
         { label: "Widget", to: "/dashboard/widget" },
+        { label: "Threads", to: "/dashboard/threads" },
         { label: "Integrations", to: "/dashboard/integrations" },
         { label: "Custom Actions", to: "/dashboard/custom-actions" },
       );
@@ -331,8 +336,11 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     if (chatMatch) {
       return [
         { label: "Dashboard", to: "/dashboard" },
-        { label: "inbox", to: "/dashboard/conversations/inbox/open" },
-        { label: customerName, to: pathname },
+        {
+          label: "inbox",
+          to: isThreadConversation ? "/dashboard/conversations/inbox/open?channel=threads" : "/dashboard/conversations/inbox/open",
+        },
+        { label: conversationLabel, to: pathname },
       ];
     }
 
@@ -406,7 +414,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           : item,
       )
       .filter((item, index, list) => item.to !== list[index + 1]?.to);
-  }, [location.pathname, customerName, ticketTitle]);
+  }, [location.pathname, conversationLabel, isThreadConversation, ticketTitle]);
 
   const searchResults = useMemo(() => {
     const term = searchQuery.trim().toLowerCase();
@@ -490,6 +498,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       },
     );
 
+    socket.on("thread_activity", handleConversationsUpdate);
     socket.on("conversation_escalated", handleConversationsUpdate);
     socket.on("status_updated", handleConversationsUpdate);
     socket.on("conversation_removed", handleConversationsUpdate);
@@ -747,6 +756,13 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
               <p className="px-3 pb-1 text-[11px] uppercase tracking-wide text-muted-foreground">
                 Channels
               </p>
+              <Link
+                to="/dashboard/threads"
+                className={`flex w-full items-center rounded-lg px-3 py-2 text-sm font-medium ${isActive("/dashboard/threads") ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-accent hover:text-foreground"}`}
+              >
+                <MessagesSquare className="mr-3 size-5" />
+                Threads
+              </Link>
               <Link to="/dashboard/channels">
                 <Button
                   data-tour-id="sidebar-nav-channels"
@@ -1121,10 +1137,10 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                     })}
                   </div>
 
-                  <div className="flex items-center gap-2 lg:gap-3">
+                  <div className="flex min-w-0 items-center gap-2 lg:gap-3">
                     {/* Escalated/Unassigned Avatars stack */}
                     {escalatedOrUnassigned.length > 0 && (
-                      <div className="flex items-center -space-x-2 mr-1">
+                      <div className="mr-1 hidden shrink-0 items-center -space-x-2 sm:flex">
                         {escalatedOrUnassigned.map((conv) => {
                           const name = getVisitorName(conv);
                           const initials = name
@@ -1352,13 +1368,14 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                       variant="outline"
                       size="sm"
                       className="cursor-pointer"
+                      aria-label={theme === "dark" ? "Light mode" : "Dark mode"}
                     >
                       {theme === "dark" ? (
-                        <Sun className="h-4 w-4 mr-2" />
+                        <Sun className="size-4" />
                       ) : (
-                        <Moon className="h-4 w-4 mr-2" />
+                        <Moon className="size-4" />
                       )}
-                      {theme === "dark" ? "Light mode" : "Dark mode"}
+                      <span className="hidden sm:inline">{theme === "dark" ? "Light mode" : "Dark mode"}</span>
                     </Button>
 
                     <Button

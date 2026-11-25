@@ -4,6 +4,7 @@ import { runPipeline } from "../modules/chat/pipelines/run-pipeline";
 import { AIJobData } from "../modules/chat/chat.types";
 import { getBullMQConnection } from "../infrastructure/queue/bullmq.client";
 import logger from "../shared/logger";
+import { InternalApiService } from "../infrastructure/api/internal-api.service";
 
 const QUEUE_NAME = "ai-processing";
 
@@ -22,7 +23,17 @@ export function startChatReplyWorker() {
         attempt: job.attemptsMade + 1,
       });
 
-      await runPipeline(job.data);
+      try {
+        await runPipeline(job.data);
+      } catch (error) {
+        if (job.data.channel === "threads") {
+          await InternalApiService.escalateConversation(job.data.conversationId, {
+            organizationId: job.data.organizationId,
+            reason: "AI support failed",
+          }).catch((handoffError) => logger.error("Threads handoff failed", { handoffError, jobId: job.id }));
+        }
+        throw error;
+      }
     },
     { connection, concurrency: config.worker.concurrency },
   );

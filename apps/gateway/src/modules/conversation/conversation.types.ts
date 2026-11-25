@@ -1,5 +1,6 @@
 export interface ListConversationsOptions {
   status?: string;
+  channel?: "threads";
   limit?: number;
   offset?: number;
   assignedTo?: string | null;

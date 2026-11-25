@@ -1,0 +1,86 @@
+/* Three reading models share the same conversation and actions. */
+.thread-concept-switch { position: sticky; top: 0; z-index: 20; background: var(--threads-background, #fff); }
+.thread-detail-page { background: #fff; }
+.thread-detail-page > header { max-width: 1080px; min-height: 56px; }
+.thread-detail-page > header button { border: 0; background: transparent; padding-left: 0; letter-spacing: .01em; }
+.thread-detail-canvas { min-height: 70vh; }
+.thread-concept-switch { background: #fff; border-color: #e4e4e7; }
+.thread-concept-switch [role="group"] { gap: 20px; }
+.thread-concept-switch [role="group"] button { padding: 16px 0 14px; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; }
+.thread-concept-switch > button { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; }
+.thread-concept-switch button { white-space: nowrap; }
+.threads-discussion { --thread-rule: #e4e4e7; }
+.threads-discussion .threads-detail-opening h1 { text-wrap: balance; }
+.threads-discussion .thread-response { scroll-margin-top: 80px; }
+.threads-discussion .thread-response--official { border-left: 2px solid currentColor; }
+.threads-discussion .thread-response--official .thread-response-avatar { left: 2px; }
+.threads-discussion--essay { max-width: 704px; }
+.threads-discussion--essay .threads-detail-opening { padding-left: 48px; }
+.threads-discussion--essay .thread-response { padding-top: 32px; padding-bottom: 34px; }
+.threads-discussion--essay .thread-response header { align-items: center; }
+.threads-discussion--essay .thread-response > div:not(:last-child) { max-width: 62ch; }
+
+/* Activity: a continuous event spine that starts with the original post. */
+.threads-discussion--timeline { position: relative; max-width: 780px; padding-left: 54px; }
+.threads-discussion--timeline { margin-left: clamp(0px, 8vw, 120px); margin-right: auto; }
+.threads-discussion--timeline::before { content: ''; position: absolute; top: 48px; bottom: 115px; left: 18px; width: 1px; background: #d4d4d8; }
+.threads-discussion--timeline .threads-detail-opening { position: relative; padding-top: 56px; padding-bottom: 38px; }
+.threads-discussion--timeline .threads-detail-opening h1 { max-width: 17ch; font-size: clamp(36px, 5vw, 62px); line-height: 1.06; letter-spacing: -.055em; }
+.threads-discussion--timeline .threads-detail-opening > div:first-child { border: 0; padding-bottom: 0; }
+.threads-discussion--timeline .threads-detail-opening > div:nth-child(2) { max-width: 66ch; font-size: 16px; line-height: 1.75; }
+.threads-discussion--timeline .thread-opening-byline { margin-top: 30px; }
+.threads-discussion--timeline .thread-opening-actions { margin-top: 26px; gap: 18px; }
+.threads-discussion--timeline .thread-opening-actions button { height: 32px; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; color: #52525b; font-size: 12px; }
+.threads-discussion--timeline .thread-opening-actions button:hover { color: #09090b; }
+.threads-discussion--timeline .thread-opening-actions svg { width: 15px; height: 15px; }
+.threads-discussion--timeline .thread-reply-count { padding: 12px 0; border-top: 1px solid var(--thread-rule); border-bottom: 0; text-transform: uppercase; letter-spacing: .08em; }
+.threads-discussion--timeline .threads-detail-opening::before { content: ''; position: absolute; left: -42px; top: 41px; width: 13px; height: 13px; border: 3px solid #18181b; background: white; border-radius: 50%; }
+.threads-discussion--timeline .thread-response { border-bottom: 0; border-top: 1px solid var(--thread-rule); padding: 24px 0 38px 0; }
+.threads-discussion--timeline .thread-response-avatar { left: -51px; top: 22px; border: 3px solid white; width: 38px; height: 38px; }
+.threads-discussion--timeline .thread-response--official { border-left: 0; border-top: 2px solid #18181b; }
+.threads-discussion--timeline .thread-response--official .thread-response-avatar { left: -51px; }
+.threads-discussion--timeline .thread-response--official header strong::after { content: ' · InteraOne'; color: #71717a; font-weight: 400; }
+.threads-discussion--timeline .thread-response-actions { margin-top: 18px; }
+.threads-discussion--timeline .thread-response-actions [aria-label="Message reactions"] button { border-radius: 3px; background: transparent; }
+.threads-discussion--timeline .thread-reply-composer { margin-top: 16px; padding-top: 30px; }
+.threads-discussion--timeline .thread-reply-composer textarea { min-height: 132px; border-radius: 0; border-color: #d4d4d8; padding: 16px; font-size: 14px; line-height: 1.65; }
+.threads-discussion--timeline .thread-reply-composer > div:last-child { align-items: stretch; }
+
+/* Correspondence: names and time sit in a dedicated margin like a transcript. */
+@media (min-width: 720px) {
+  .threads-discussion--transcript { max-width: 980px; }
+  .threads-discussion--transcript .threads-detail-opening { padding-left: 222px; padding-top: 48px; }
+  .threads-discussion--transcript .thread-response { display: grid; grid-template-columns: 190px minmax(0, 1fr); column-gap: 32px; padding: 30px 0; }
+  .threads-discussion--transcript .thread-response-avatar { left: 0; top: 30px; }
+  .threads-discussion--transcript .thread-response header { grid-column: 1; display: block; padding-left: 45px; }
+  .threads-discussion--transcript .thread-response header > div:first-child > div { display: block; }
+  .threads-discussion--transcript .thread-response header strong { display: block; }
+  .threads-discussion--transcript .thread-response header button { margin-top: 8px; }
+  .threads-discussion--transcript .thread-response > div { grid-column: 2; }
+  .threads-discussion--transcript .thread-response > div:nth-of-type(1) { grid-row: 1 / span 2; margin-top: 0; }
+  .threads-discussion--transcript .thread-response--official { border-left: 0; border-top: 2px solid #18181b; }
+  .threads-discussion--transcript .thread-response--official .thread-response-avatar { left: 0; }
+}
+@media (max-width: 719px) {
+  .thread-detail-page { padding-left: 20px; padding-right: 20px; }
+  .thread-concept-switch [role="group"] { gap: 16px; }
+  .thread-concept-switch [role="group"] button { font-size: 10px; }
+  .thread-concept-switch { overflow-x: auto; }
+  .threads-discussion--essay .threads-detail-opening { padding-left: 0; }
+  .threads-discussion--timeline { padding-left: 42px; margin-left: 0; }
+  .threads-discussion--timeline::before { left: 13px; }
+  .threads-discussion--timeline .threads-detail-opening::before { left: -35px; }
+  .threads-discussion--timeline .thread-response-avatar,
+  .threads-discussion--timeline .thread-response--official .thread-response-avatar { left: -44px; }
+  .threads-discussion--timeline .threads-detail-opening { padding-top: 34px; }
+  .threads-discussion--timeline .threads-detail-opening h1 { font-size: 36px; }
+}
+@media (prefers-color-scheme: dark) {
+  .thread-detail-page, .thread-concept-switch { background: #09090b; }
+  .threads-discussion { --thread-rule: #3f3f46; }
+  .threads-discussion--timeline::before { background: #52525b; }
+  .threads-discussion--timeline .threads-detail-opening::before { border-color: #fff; background: #09090b; }
+  .threads-discussion--timeline .thread-response-avatar { border-color: #09090b; }
+  .threads-discussion--timeline .thread-response--official,
+  .threads-discussion--transcript .thread-response--official { border-top-color: #fff; }
+}

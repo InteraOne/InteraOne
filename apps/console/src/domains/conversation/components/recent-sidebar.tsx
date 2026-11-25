@@ -223,7 +223,7 @@ export function RecentConversationsSidebar() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-1 mb-1">
                     <p className="text-xs font-bold truncate text-foreground">
-                      {conv.visitorName}
+                      {conv.channel === "threads" ? conv.subject : conv.visitorName}
                     </p>
                     <span className="text-[9px] text-muted-foreground/75 whitespace-nowrap">
                       {formatRecentTime(conv.openedAt)}
