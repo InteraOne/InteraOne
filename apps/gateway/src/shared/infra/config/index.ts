@@ -10,6 +10,9 @@ interface Config {
     mode: "cloud" | "self-host";
     apiUrl: string;
     allowedDomains: string[];
+    threads: {
+      tlsMode: "on-demand" | "external" | "disabled";
+    };
   };
   database: {
     mongoUri: string;
@@ -192,6 +195,13 @@ const config: Config = {
       .split(",")
       .map((d) => d.trim().toLowerCase())
       .filter(Boolean),
+    threads: {
+      tlsMode:
+        process.env.THREADS_TLS_MODE === "on-demand" ||
+        process.env.THREADS_TLS_MODE === "external"
+          ? process.env.THREADS_TLS_MODE
+          : "disabled",
+    },
   },
   database: {
     mongoUri: process.env.MONGODB_URI!,

@@ -1,3 +1,4 @@
+import { notifyThreadOwner } from "@modules/threads/notifications";
 import { Channel, IChannel, ChannelType } from "@shared/models/Channel";
 import { Conversation, Message, Organization, Ticket, Contact, User, Membership } from "@shared/models";
 import { aiQueue } from "@shared/infra/queue";
@@ -492,12 +493,16 @@ export class ChannelService {
     conversationId: string,
     content: string,
   ): Promise<void> {
-    const conversation = await Conversation.findById(conversationId);
+    const conversation = await Conversation.findOne({ _id: conversationId, organizationId });
     if (!conversation) {
       logger.error(`[ChannelService] Conversation ${conversationId} not found`);
       return;
     }
 
+    if (conversation.channel === "threads") {
+      await notifyThreadOwner(conversation, "reply");
+      return;
+    }
     let channelType = conversation.channel || conversation.metadata?.channel;
     let channelId = conversation.channelId || conversation.metadata?.channelId;
 

@@ -17,7 +17,7 @@ export interface AIJobData {
     email?: boolean;
     phone?: boolean;
   };
-  channel?: "widget" | "email" | "whatsapp" | "telegram";
+  channel?: "widget" | "email" | "whatsapp" | "telegram" | "threads";
   aiEnabled?: boolean;
   subscriptionExpired?: boolean;
 }

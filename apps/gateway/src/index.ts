@@ -3,6 +3,7 @@ import { createServer } from "http";
 import { randomUUID } from "crypto";
 import cors from "cors";
 import helmet from "helmet";
+import threadsRouter from "./modules/threads/threads.routes";
 import { Router } from "express";
 import config from "@shared/infra/config";
 import { connectDatabase } from "@shared/infra/database";
@@ -152,6 +153,7 @@ class Application {
     router.use("/notifications", notificationRouter);
     router.use("/analytics", analyticsRouter);
     router.use("/tickets", ticketsRouter);
+    router.use("/threads", threadsRouter);
     router.use("/email", emailRouter);
     router.use("/channels", channelsRouter);
     router.use("/observability", observabilityRouter);

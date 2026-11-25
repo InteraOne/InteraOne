@@ -1,5 +1,10 @@
 import { createBrowserRouter, Navigate } from "react-router";
-import App from "../App";
+import {
+  CustomDomainPortalPage,
+  LegacyThreadRedirect,
+  PortalPage,
+} from "@/domains/threads/pages/portal-page";
+import { ManageThreads } from "@/domains/threads/pages/manage-threads-page";
 import LoginPage from "../domains/auth/pages/login/page";
 import SetupPage from "../domains/auth/pages/setup/page";
 import PasswordRecoveryPage from "../domains/auth/pages/password-recovery/page";
@@ -45,10 +50,22 @@ import { AccountsPage } from "@/domains/accounts/pages/accounts-page";
 import { AccountDetailsPage } from "@/domains/accounts/pages/account-details-page";
 
 const router = createBrowserRouter([
+  { path: "/threads/:slug", element: <PortalPage /> },
+  { path: "/threads/:slug/thread/:threadId", element: <PortalPage /> },
+  { path: "/threads/:slug/:threadId", element: <LegacyThreadRedirect /> },
+  {
+    path: "/dashboard/threads",
+    element: (
+      <ProtectedRoute requiredRole="admin">
+        <DashboardLayout><ManageThreads /></DashboardLayout>
+      </ProtectedRoute>
+    ),
+  },
   {
     path: "/",
-    element: <App />,
+    element: <CustomDomainPortalPage />,
   },
+  { path: "/thread/:threadId", element: <CustomDomainPortalPage /> },
   {
     path: "/auth/login",
     element: <LoginPage />,

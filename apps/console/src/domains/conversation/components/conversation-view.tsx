@@ -28,6 +28,7 @@ import { useNavigate, useLocation, useSearchParams } from "react-router";
 import io, { Socket } from "socket.io-client";
 import { RouteConversationDialog } from "./route-conversation-dialog";
 import { StatusSelector } from "./status-selector";
+import { ThreadLabel } from "./thread-label";
 import { useQueryClient } from "@tanstack/react-query";
 import { useConversationDetail, useAgentRuns, useTemplates } from "../hooks";
 import type {
@@ -270,7 +271,9 @@ export function ConversationView({ conversationId }: ConversationViewProps) {
     useConversationDetail(conversationId);
   const { data: contacts = [] } = useContacts();
   const { data: templates = [] } = useTemplates();
-  const [isContactSidebarOpen, setIsContactSidebarOpen] = useState(true);
+  const [isContactSidebarOpen, setIsContactSidebarOpen] = useState(
+    () => window.matchMedia("(min-width: 1536px)").matches,
+  );
 
   const clearUnreadCount = useCallback(
     (targetConversationId: string) => {
@@ -385,6 +388,8 @@ export function ConversationView({ conversationId }: ConversationViewProps) {
   }, [matchedContact, conversation]);
 
   const customerName = contactDetails?.name || "Anonymous User";
+  const isThread = conversation?.channel === "threads";
+  const thread = conversation?.metadata.thread;
   const customerEmail =
     contactDetails?.email && contactDetails.email !== "anonymous@temp.local"
       ? contactDetails.email
@@ -931,6 +936,9 @@ export function ConversationView({ conversationId }: ConversationViewProps) {
   };
 
   const renderMessageContent = (message: ConversationMessage) => {
+    if (message.metadata?.source === "threads") {
+      return <div className="whitespace-pre-wrap break-words">{message.content}</div>;
+    }
     if (message.type === "file" || message.type === "image") {
       try {
         const attachment = JSON.parse(message.content) as {
@@ -1011,14 +1019,14 @@ export function ConversationView({ conversationId }: ConversationViewProps) {
 
   return (
     <div
-      className="flex h-full min-h-0 w-full gap-0 overflow-hidden bg-transparent"
+      className="relative flex h-full min-h-0 w-full gap-0 overflow-hidden bg-transparent"
       data-tour-id="page-conversation-detail"
     >
       {/* Left Chat / Runs Column */}
       <div className="flex h-full min-w-0 flex-1 flex-col overflow-hidden bg-background">
         {/* Header */}
-        <div className="flex items-center justify-between gap-3 border-b border-border/70 bg-transparent p-4">
-          <div className="flex min-w-0 items-center space-x-3">
+        <div className="flex flex-col items-stretch justify-between gap-2 border-b border-border/70 p-3 sm:flex-row sm:items-center sm:p-4">
+          <div className="flex min-w-0 flex-1 items-center gap-2">
             <Button
               variant="ghost"
               size="icon"
@@ -1030,20 +1038,18 @@ export function ConversationView({ conversationId }: ConversationViewProps) {
                   const isAssignedToMe =
                     conversation?.assignedTo?._id === user?.id ||
                     conversation?.assignedTo === user?.id;
-                  if (isAssignedToMe) {
-                    navigate("/dashboard/conversations/inbox/assigned");
-                  } else {
-                    navigate("/dashboard/conversations/inbox/open");
-                  }
+                  const view = isAssignedToMe ? "assigned" : "open";
+                  navigate(`${basePath}/${view}${isThread ? "?channel=threads" : ""}`);
                 }
               }}
-              className="cursor-pointer"
+              className="shrink-0 cursor-pointer"
+              aria-label="Back to inbox"
             >
               <ArrowLeft className="h-4 w-4" />
             </Button>
 
             <div className="flex min-w-0 items-center space-x-3">
-              <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-100">
+              <div className="relative hidden size-10 shrink-0 items-center justify-center rounded-full bg-blue-100 sm:flex">
                 <span className="text-blue-700 font-semibold">
                   {customerName
                     .split(" ")
@@ -1051,7 +1057,7 @@ export function ConversationView({ conversationId }: ConversationViewProps) {
                     .join("")
                     .toUpperCase()}
                 </span>
-                {isAnonymous && (
+                {isAnonymous && !isThread && (
                   <span
                     className="absolute -top-1 -right-1 w-3 h-3 bg-yellow-500 rounded-full border-2 border-white"
                     title="Anonymous user"
@@ -1060,8 +1066,8 @@ export function ConversationView({ conversationId }: ConversationViewProps) {
               </div>
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
-                  <h2 className="truncate font-semibold text-foreground">
-                    {customerName}
+                  <h2 className="truncate font-semibold text-foreground" title={isThread ? conversation?.subject : undefined}>
+                    {isThread ? conversation?.subject || "Thread" : customerName}
                   </h2>
                   {isTicketReply && (
                     <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/25 bg-amber-500/10 px-2 py-0.5 text-[10px] font-bold text-amber-700 dark:text-amber-400">
@@ -1069,20 +1075,25 @@ export function ConversationView({ conversationId }: ConversationViewProps) {
                       Ticket Reply
                     </span>
                   )}
-                  {isAnonymous && (
+                  {isAnonymous && !isThread && (
                     <span className="px-2 py-0.5 text-xs bg-yellow-100 text-yellow-700 rounded-full">
                       Anonymous
                     </span>
                   )}
                 </div>
-                <p className="truncate text-sm text-muted-foreground">
-                  {customerEmail}
-                </p>
+                {isThread ? (
+                  <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-1.5">
+                    <ThreadLabel thread={thread} />
+                    <span className="min-w-0 truncate text-xs text-muted-foreground">{customerName}</span>
+                  </div>
+                ) : (
+                  <p className="truncate text-sm text-muted-foreground">{customerEmail}</p>
+                )}
               </div>
             </div>
           </div>
 
-          <div className="flex shrink-0 items-center gap-0.5 rounded-lg border border-border bg-background p-0.5 shadow-xs">
+          <div className="flex shrink-0 items-center gap-0.5 self-end rounded-lg border border-border bg-background p-0.5 shadow-xs sm:self-center">
             <RouteConversationDialog
               conversationId={conversationId}
               onRouted={() => {
@@ -1099,7 +1110,7 @@ export function ConversationView({ conversationId }: ConversationViewProps) {
                 if (conversation) {
                   setConversation({ ...conversation, status: newStatus });
                 }
-                if (newStatus !== "open") {
+                if (!isThread && newStatus !== "open") {
                   navigate(basePath);
                 }
               }}
@@ -1203,7 +1214,7 @@ export function ConversationView({ conversationId }: ConversationViewProps) {
             <div className="border-t border-border/70 bg-card px-4 py-3 text-slate-900 dark:text-zinc-100">
               <div className="overflow-visible">
                 <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/70 pb-2">
-                  <div className="flex min-w-0 items-center gap-2">
+                  <div className="flex min-w-0 flex-wrap items-center gap-2">
                     <TemplatePicker
                       key={conversationId}
                       open={templatePickerOpen}
@@ -1414,7 +1425,7 @@ export function ConversationView({ conversationId }: ConversationViewProps) {
                       placeholder={
                         isTicketReply
                           ? "Reply via email..."
-                          : "Write a reply..."
+                          : isThread ? "Reply in this thread…" : "Write a reply..."
                       }
                       className="min-h-[76px] flex-1 resize-none cursor-text rounded-none border-0 bg-transparent p-0 shadow-none focus-visible:border-transparent focus-visible:ring-0 text-foreground placeholder:text-muted-foreground/60 text-sm leading-relaxed"
                       disabled={isLoading}
@@ -1435,7 +1446,9 @@ export function ConversationView({ conversationId }: ConversationViewProps) {
                   <span className="text-xs text-slate-600 dark:text-zinc-400">
                     {isTicketReply
                       ? "Reply will be sent via email"
-                      : "Press Enter to send"}
+                      : isThread
+                        ? thread?.public ? "This reply will be public on the portal" : "Only the requester and your team can see this reply"
+                        : "Press Enter to send"}
                   </span>
                 </div>
               </div>
@@ -1448,7 +1461,7 @@ export function ConversationView({ conversationId }: ConversationViewProps) {
 
       {/* Right User Contact Sidebar */}
       {contactDetails && isContactSidebarOpen && (
-        <div className="w-80 shrink-0 flex flex-col h-full overflow-hidden rounded-lg border border-border bg-card shadow-sm select-none">
+        <div className="absolute inset-y-0 right-0 z-10 flex h-full w-full max-w-80 shrink-0 flex-col overflow-hidden border-l bg-card shadow-lg 2xl:static 2xl:shadow-none">
           <div className="p-4 border-b border-border bg-card flex items-center justify-between">
             <h3 className="text-sm font-semibold">Contact details</h3>
             <div className="flex items-center gap-1">

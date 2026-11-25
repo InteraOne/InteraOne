@@ -1,6 +1,6 @@
 import { CollectUserInfo, KnownVisitorDetails } from "../../chat.types";
 
-export type Channel = "widget" | "email" | "whatsapp" | "telegram";
+export type Channel = "widget" | "email" | "whatsapp" | "telegram" | "threads";
 
 export interface BuildSystemPromptOptions {
     companyName?: string;

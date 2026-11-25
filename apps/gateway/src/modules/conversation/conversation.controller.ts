@@ -1,3 +1,5 @@
+import { notifyThreadOwner } from "@modules/threads/notifications";
+import { handoffThread } from "@modules/threads/handoff";
 import { Request, Response } from "express";
 import { Types } from "mongoose";
 import { asyncHandler, sendError, sendResponse } from "@shared/core/response";
@@ -20,6 +22,7 @@ export const getConversations = asyncHandler(
   async (req: Request, res: Response) => {
     const {
       status,
+      channel,
       limit = 50,
       offset = 0,
       assignedToMe,
@@ -37,6 +40,7 @@ export const getConversations = asyncHandler(
 
     const result = await conversationService.getConversations(getOrgId(req), {
       status: status as string,
+      channel: channel === "threads" ? channel : undefined,
       limit: Number(limit),
       offset: Number(offset),
       assignedTo,
@@ -292,6 +296,8 @@ export const updateConversationStatus = asyncHandler(
       status: result.conversation!.status,
     });
 
+    if (result.conversation) void notifyThreadOwner(result.conversation, "status");
+
     if (status === "closed" || status === "resolved") {
       tracker.trackEvent(
         orgId,
@@ -380,9 +386,21 @@ export const aiEscalate = asyncHandler(async (req: Request, res: Response) => {
   if (!organizationId) return sendError(res, 400, "organizationId is required");
 
   // Fetch conversation first to resolve channel details for outbound notifications
-  const conv = await Conversation.findById(conversationId)
-    .select("channel channelId sessionId metadata subject")
+  const conv = await Conversation.findOne({ _id: conversationId, organizationId })
+    .select("channel channelId sessionId metadata subject status assignedTo")
     .lean();
+
+  if (!conv) return sendError(res, 404, "Conversation not found");
+  if (conv.channel === "threads") {
+    if (conv.metadata?.thread?.category !== "support")
+      return sendError(res, 404, "Conversation not found");
+    await handoffThread(organizationId, conversationId, reason || "AI requested the support team");
+    return sendResponse(res, 200, true, "Escalated to human support", {
+      conversationId,
+      assignedAgent: conv.assignedTo?.toString() || null,
+      status: conv.status,
+    });
+  }
 
   let bodyText = "";
   if (conv && conv.channel === "email_channel") {

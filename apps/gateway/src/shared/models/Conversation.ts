@@ -46,11 +46,19 @@ conversationSchema.index({ participants: 1 });
 conversationSchema.index({ organizationId: 1, updatedAt: -1 });
 conversationSchema.index({ organizationId: 1, channelId: 1 });
 conversationSchema.index({ organizationId: 1, channel: 1 });
+conversationSchema.index(
+  { organizationId: 1, "metadata.thread.owner": 1, updatedAt: -1 },
+  { partialFilterExpression: { channel: "threads" } },
+);
+conversationSchema.index(
+  { organizationId: 1, "metadata.thread.public": 1, updatedAt: -1 },
+  { partialFilterExpression: { channel: "threads" } },
+);
 
 function clearConversationCache(id: any) {
   if (id) {
     const idStr = id.toString();
-    redisClient.del(`conversation:${idStr}:gate`).catch(() => {});
+    redisClient.del([`conversation:${idStr}:gate`, `ai:conversation:${idStr}`]).catch(() => {});
   }
 }
 

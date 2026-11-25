@@ -53,7 +53,7 @@ export const handleAgentMessage = ({ socket, io }: { socket: any; io: any }) => 
 
         // Update conversation's last activity, assignment & escalation status
         await Conversation.updateOne(
-          { _id: conversationId },
+          { _id: conversationId, organizationId: orgId },
           {
             $set: {
               assignedTo: agentId,
@@ -94,6 +94,10 @@ export const handleAgentMessage = ({ socket, io }: { socket: any; io: any }) => 
             createdAt: message.createdAt,
           },
         });
+
+        if (gateState.interactionSource === "threads") {
+          socketService.emitToOrg(orgId.toString(), "thread_activity", { conversationId });
+        }
 
         // Forward agent reply to channels if applicable
         if (gateState.interactionSource !== "widget") {

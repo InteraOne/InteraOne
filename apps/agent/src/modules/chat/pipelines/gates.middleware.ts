@@ -339,15 +339,17 @@ export async function executePreChecks(
   const subCheck = await checkSubscription(ctx);
   if (subCheck.shouldReturn) return { shouldReturn: true };
 
-  // Gate 3 — OTP verification
-  const otpCheck = await checkOtpVerification(ctx);
+  // Threads customers sign in before sending a message.
+  const otpCheck = gateCheck.channel === "threads"
+    ? { shouldReturn: false, verifiedIdentityEmail: null, otpCode: null }
+    : await checkOtpVerification(ctx);
   if (otpCheck.shouldReturn) return { shouldReturn: true };
 
   // Gate 4 — FAQ fast-path (skipped when message was an OTP code)
-  const customActions = await getCustomActionTools({
+  const customActions = gateCheck.channel === "threads" ? undefined : await getCustomActionTools({
     organizationId: ctx.job.organizationId, conversationId: ctx.conversationId,
   });
-  if (!customActions.tools.length) {
+  if (!customActions?.tools.length) {
     const faqCheck = await checkFaqFastPath(ctx, otpCheck.otpCode);
     if (faqCheck.shouldReturn) return { shouldReturn: true };
   }

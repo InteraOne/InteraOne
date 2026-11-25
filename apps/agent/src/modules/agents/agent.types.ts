@@ -47,7 +47,7 @@ export interface Tool {
 
 export interface ToolFilterOptions {
   fallbackToAgent?: boolean;
-  channel?: "widget" | "email" | "whatsapp" | "telegram";
+  channel?: "widget" | "email" | "whatsapp" | "telegram" | "threads";
   organizationId?: string;
   conversationId?: string;
 }

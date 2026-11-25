@@ -1,12 +1,21 @@
-import React, { useMemo, useState, useEffect } from "react";
-import { useNavigate } from "react-router";
+import React, { useMemo, useEffect, useState } from "react";
+import { Link, useSearchParams } from "react-router";
 import { useAuth } from "@/domains/auth/hooks";
 import { useQueryClient } from "@tanstack/react-query";
 import io from "socket.io-client";
 import { useConversations, useMyConversations } from "../hooks";
 import { Input } from "@/shared/ui/input";
+import { Button } from "@/shared/ui/button";
+import { ThreadLabel } from "../components/thread-label";
 import { Loader } from "@/shared/ui/loader";
-import { MessageCircle, Search, Inbox, User2 } from "lucide-react";
+import {
+  ChevronRight,
+  MessageCircle,
+  MessagesSquare,
+  Search,
+  Inbox,
+  User2,
+} from "lucide-react";
 import {
   AllChannelsIcon,
   EmailIcon,
@@ -44,28 +53,39 @@ const CHANNEL_FILTERS: {
     id: "web",
     label: "Web",
     icon: WebIcon,
-    activeClass: "bg-indigo-100 dark:bg-indigo-900/40 ring-1 ring-indigo-300 dark:ring-indigo-700",
+    activeClass:
+      "bg-indigo-100 dark:bg-indigo-900/40 ring-1 ring-indigo-300 dark:ring-indigo-700",
     inactiveClass: "hover:bg-indigo-50 dark:hover:bg-indigo-900/20",
+  },
+  {
+    id: "threads",
+    label: "Threads",
+    icon: MessagesSquare,
+    activeClass: "bg-primary/10 ring-1 ring-primary/30",
+    inactiveClass: "hover:bg-muted/60",
   },
   {
     id: "email",
     label: "Email",
     icon: EmailIcon,
-    activeClass: "bg-red-100 dark:bg-red-900/40 ring-1 ring-red-300 dark:ring-red-700",
+    activeClass:
+      "bg-red-100 dark:bg-red-900/40 ring-1 ring-red-300 dark:ring-red-700",
     inactiveClass: "hover:bg-red-50 dark:hover:bg-red-900/20",
   },
   {
     id: "whatsapp",
     label: "WhatsApp",
     icon: WhatsAppIcon,
-    activeClass: "bg-emerald-100 dark:bg-emerald-900/40 ring-1 ring-emerald-300 dark:ring-emerald-700",
+    activeClass:
+      "bg-emerald-100 dark:bg-emerald-900/40 ring-1 ring-emerald-300 dark:ring-emerald-700",
     inactiveClass: "hover:bg-emerald-50 dark:hover:bg-emerald-900/20",
   },
   {
     id: "telegram",
     label: "Telegram",
     icon: TelegramIcon,
-    activeClass: "bg-sky-100 dark:bg-sky-900/40 ring-1 ring-sky-300 dark:ring-sky-700",
+    activeClass:
+      "bg-sky-100 dark:bg-sky-900/40 ring-1 ring-sky-300 dark:ring-sky-700",
     inactiveClass: "hover:bg-sky-50 dark:hover:bg-sky-900/20",
   },
 ];
@@ -113,21 +133,37 @@ const getChannelDisplay = (channel: string) => {
 };
 
 export function ConversationsInboxPage({ mode = "all" }: { mode?: Tab }) {
-  const navigate = useNavigate();
+  const [filters, setFilters] = useSearchParams();
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const tab = mode;
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("open");
-  const [channelFilter, setChannelFilter] = useState<string>("all");
-  const [priorityFilter, setPriorityFilter] = useState<string>("all");
+  const search = filters.get("q") || "";
+  const statusFilter = filters.get("status") || "open";
+  const channelFilter = filters.get("channel") || "all";
+  const priorityFilter = filters.get("priority") || "all";
+  const isThreads = channelFilter === "threads";
+  const [now, setNow] = useState(Date.now);
+  const channel = isThreads ? "threads" : undefined;
+  const queue = useConversations(statusFilter, { unassigned: true, channel });
+  const assigned = useMyConversations(statusFilter, channel);
+  const activeQuery = tab === "all" ? queue : assigned;
 
-  const { data: allOpen = [], isLoading: loadingAll } = useConversations(
-    statusFilter,
-    { unassigned: true },
-  );
-  const { data: mine = [], isLoading: loadingMine } =
-    useMyConversations(statusFilter);
+  function setFilter(key: string, value: string, defaultValue: string) {
+    const next = new URLSearchParams(filters);
+    if (value === defaultValue) next.delete(key);
+    else next.set(key, value);
+    setFilters(next, { replace: key === "q" });
+  }
+
+  function inboxUrl(path: "open" | "assigned") {
+    const query = filters.toString();
+    return `${BASE_PATH}/${path}${query ? `?${query}` : ""}`;
+  }
+
+  useEffect(() => {
+    const clock = window.setInterval(() => setNow(Date.now()), 60_000);
+    return () => window.clearInterval(clock);
+  }, []);
 
   // Socket: invalidate lists on new or escalated conversations
   useEffect(() => {
@@ -142,9 +178,13 @@ export function ConversationsInboxPage({ mode = "all" }: { mode?: Tab }) {
     const handleUpdate = () => {
       // Invalidates all queries whose key starts with "conversations"
       // (covers ["conversations", status, opts] and ["conversations", "mine"])
-      queryClient.invalidateQueries({ queryKey: ["conversations"], exact: false });
+      queryClient.invalidateQueries({
+        queryKey: ["conversations"],
+        exact: false,
+      });
     };
 
+    socket.on("thread_activity", handleUpdate);
     socket.on("conversation_pending", handleUpdate);
     socket.on("conversation_assigned", handleUpdate);
     socket.on("conversation_escalated", handleUpdate);
@@ -156,13 +196,10 @@ export function ConversationsInboxPage({ mode = "all" }: { mode?: Tab }) {
     };
   }, [queryClient]);
 
-  const isLoading =
-    (tab === "all" && loadingAll) || (tab === "mine" && loadingMine);
-
-  const rawList: ConversationListItem[] = tab === "all" ? allOpen : mine;
+  const rawList = activeQuery.data;
 
   const list = useMemo(() => {
-    let filtered = rawList;
+    let filtered = rawList ?? [];
 
     // Filter by search query
     const q = search.trim().toLowerCase();
@@ -180,7 +217,13 @@ export function ConversationsInboxPage({ mode = "all" }: { mode?: Tab }) {
           ""
         ).toLowerCase();
         const msg = (conv.lastMessage?.content || "").toLowerCase();
-        return name.includes(q) || email.includes(q) || msg.includes(q);
+        const subject = (conv.subject || "").toLowerCase();
+        return (
+          subject.includes(q) ||
+          name.includes(q) ||
+          email.includes(q) ||
+          msg.includes(q)
+        );
       });
     }
 
@@ -212,7 +255,7 @@ export function ConversationsInboxPage({ mode = "all" }: { mode?: Tab }) {
 
   const getRelativeTime = (iso?: string) => {
     if (!iso) return "";
-    const diff = Date.now() - new Date(iso).getTime();
+    const diff = now - new Date(iso).getTime();
     const mins = Math.floor(diff / 60000);
     if (mins < 1) return "Just now";
     if (mins < 60) return `${mins}m ago`;
@@ -227,114 +270,166 @@ export function ConversationsInboxPage({ mode = "all" }: { mode?: Tab }) {
   // Render
   return (
     <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="p-6 border-b border-border bg-card/50" data-tour-id="page-inbox-heading">
-        <div className="flex items-center gap-3 mb-1">
-          <Inbox className="h-5 w-5 text-primary" />
-          <h1 className="text-xl font-semibold text-foreground">Inbox</h1>
+      <header
+        className="border-b bg-card px-4 py-4 sm:px-6"
+        data-tour-id="page-inbox-heading"
+      >
+        <div className="flex items-center gap-3">
+          <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
+            {isThreads ? (
+              <MessagesSquare className="size-5" />
+            ) : (
+              <Inbox className="size-5" />
+            )}
+          </div>
+          <div>
+            <h1 className="text-xl font-semibold tracking-tight text-foreground">
+              {isThreads ? "Threads inbox" : "Inbox"}
+            </h1>
+            {isThreads && (
+              <p className="text-sm text-muted-foreground">
+                Support requests, community discussions, and feature requests.
+              </p>
+            )}
+          </div>
         </div>
-        <p className="text-sm text-muted-foreground">
-          Human-escalated conversations waiting for your response.
-        </p>
-      </div>
-
-      {/* Tab + Search bar */}
-      <div className="flex items-center gap-2.5 px-4 pt-4 pb-2 border-b border-border flex-wrap">
-        <div className="flex rounded-md border border-input bg-background p-0.5 gap-0.5 shrink-0" data-tour-id="page-inbox-tabs">
+        <nav
+          aria-label="Inbox assignment"
+          className="mt-4 flex flex-wrap gap-1"
+          data-tour-id="page-inbox-tabs"
+        >
           {TABS.map(({ id, label, icon: Icon }) => (
-            <button
+            <Link
               key={id}
-              onClick={() =>
-                navigate(
-                  id === "all"
-                    ? "/dashboard/conversations/inbox/open"
-                    : "/dashboard/conversations/inbox/assigned",
-                )
-              }
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-sm rounded transition-colors cursor-pointer ${
-                tab === id
-                  ? "bg-primary text-primary-foreground font-medium"
-                  : "text-muted-foreground hover:text-foreground hover:bg-muted"
-              }`}
+              to={inboxUrl(id === "all" ? "open" : "assigned")}
+              aria-current={tab === id ? "page" : undefined}
+              className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${tab === id ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}
             >
-              <Icon className="h-3.5 w-3.5" />
-              {label}
-            </button>
+              <Icon className="size-4" aria-hidden="true" /> {label}
+            </Link>
           ))}
-        </div>
+        </nav>
+      </header>
 
-        <div className="flex items-center gap-2 ml-auto flex-wrap w-full md:w-auto" data-tour-id="page-inbox-search">
-          {/* Status Filter */}
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="h-9 px-3 py-1.5 text-xs bg-background text-foreground border border-input rounded-md cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary shadow-sm font-medium select-none"
-          >
-            <option value="open">Open Status</option>
-            <option value="resolved">Resolved Status</option>
-            <option value="closed">Closed Status</option>
-            <option value="all">All Statuses</option>
-          </select>
-
-          {/* Channel Filter */}
-          <div className="flex h-9 items-center rounded-md border border-input bg-background p-0.5 shadow-sm gap-0.5">
-            {CHANNEL_FILTERS.map(({ id, label, icon: Icon, activeClass, inactiveClass }) => (
+      <div
+        className="space-y-3 border-b bg-background px-4 py-3 sm:px-6"
+        data-tour-id="page-inbox-search"
+      >
+        <div
+          className="flex flex-wrap gap-1.5"
+          role="group"
+          aria-label="Channel"
+        >
+          {CHANNEL_FILTERS.map(
+            ({ id, label, icon: Icon, activeClass, inactiveClass }) => (
               <button
                 key={id}
                 type="button"
-                title={label}
-                onClick={() => setChannelFilter(id)}
-                className={`inline-flex h-7 items-center gap-1.5 rounded px-2 text-xs font-medium transition-all duration-150 cursor-pointer ${
-                  channelFilter === id ? activeClass : inactiveClass
-                }`}
+                aria-pressed={channelFilter === id}
+                onClick={() => setFilter("channel", id, "all")}
+                className={`inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium transition-colors ${channelFilter === id ? activeClass : inactiveClass}`}
               >
-                <Icon className="h-3.5 w-3.5 shrink-0" />
-                <span className="hidden lg:inline">{label}</span>
+                <Icon className="size-3.5 shrink-0" aria-hidden="true" />
+                {label}
               </button>
-            ))}
-          </div>
-
-          {/* Priority Filter */}
-          <select
-            value={priorityFilter}
-            onChange={(e) => setPriorityFilter(e.target.value)}
-            className="h-9 px-3 py-1.5 text-xs bg-background text-foreground border border-input rounded-md cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary shadow-sm font-medium select-none"
-          >
-            <option value="all">All Priorities</option>
-            <option value="low">Low Priority</option>
-            <option value="medium">Medium Priority</option>
-            <option value="high_urgent">High/Urgent</option>
-          </select>
-
-          <div className="relative flex-grow md:flex-initial max-w-[180px]">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            ),
+          )}
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative min-w-40 flex-1 sm:max-w-sm">
+            <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
-              placeholder="Search..."
+              type="search"
+              aria-label={isThreads ? "Search threads" : "Search conversations"}
+              placeholder={
+                isThreads
+                  ? "Search by thread title or customer"
+                  : "Search conversations"
+              }
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-9 h-9 cursor-text"
+              onChange={(event) => setFilter("q", event.target.value, "")}
+              className="h-9 pl-9"
             />
           </div>
+          <select
+            aria-label="Status"
+            value={statusFilter}
+            onChange={(event) =>
+              setFilter("status", event.target.value, "open")
+            }
+            className="h-9 rounded-md border border-input bg-background px-2.5 text-xs font-medium"
+          >
+            <option value="open">Open</option>
+            <option value="resolved">Resolved</option>
+            <option value="closed">Closed</option>
+            <option value="all">All statuses</option>
+          </select>
+          <select
+            aria-label="Priority"
+            value={priorityFilter}
+            onChange={(event) =>
+              setFilter("priority", event.target.value, "all")
+            }
+            className="h-9 rounded-md border border-input bg-background px-2.5 text-xs font-medium"
+          >
+            <option value="all">All priorities</option>
+            <option value="low">Low priority</option>
+            <option value="medium">Medium priority</option>
+            <option value="high_urgent">High or urgent</option>
+          </select>
         </div>
       </div>
 
       {/* Conversation list */}
-      <div className="flex-1 overflow-y-auto divide-y divide-border bg-background" data-tour-id="page-inbox-list">
-        {isLoading ? (
+      <div
+        className="flex-1 overflow-y-auto divide-y divide-border bg-background"
+        data-tour-id="page-inbox-list"
+      >
+        {activeQuery.isLoading ? (
           <div className="flex items-center justify-center h-48">
             <Loader size="sm" />
           </div>
+        ) : activeQuery.isError ? (
+          <div
+            className="grid justify-items-center gap-3 p-10 text-center"
+            role="alert"
+          >
+            <p className="text-sm font-medium">The inbox couldn’t load.</p>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void activeQuery.refetch()}
+            >
+              Retry
+            </Button>
+          </div>
         ) : list.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-48 text-center px-6">
-            <MessageCircle className="h-10 w-10 text-muted-foreground/40 mb-3" />
-            <p className="text-sm font-medium text-foreground">
-              No conversations
+          <div className="grid justify-items-center gap-2 p-10 text-center">
+            <div className="grid size-10 place-items-center rounded-xl bg-muted text-muted-foreground">
+              {isThreads ? (
+                <MessagesSquare className="size-5" />
+              ) : (
+                <MessageCircle className="size-5" />
+              )}
+            </div>
+            <p className="text-sm font-medium">
+              {isThreads ? "No threads to show" : "No conversations to show"}
             </p>
-            <p className="text-xs text-muted-foreground mt-1">
-              {tab === "all"
-                ? "No open conversations right now."
-                : "No conversations are assigned to you."}
-            </p>
+            {(search ||
+              statusFilter !== "open" ||
+              priorityFilter !== "all") && (
+              <Button
+                variant="link"
+                size="sm"
+                onClick={() =>
+                  setFilters(
+                    channelFilter === "all" ? {} : { channel: channelFilter },
+                  )
+                }
+              >
+                Clear search and filters
+              </Button>
+            )}
           </div>
         ) : (
           list.map((conv) => {
@@ -350,20 +445,19 @@ export function ConversationsInboxPage({ mode = "all" }: { mode?: Tab }) {
             const isUnread = conv.unreadCount > 0;
             const channel = getChannelValue(conv);
             const channelDisplay = getChannelDisplay(channel);
+            const title =
+              channel === "threads" && conv.subject ? conv.subject : name;
 
             return (
-              <div
+              <Link
                 key={conv._id}
-                onClick={() =>
-                  navigate(`${BASE_PATH}/chat/${conv._id}`, {
-                    state: { from: window.location.pathname },
-                  })
-                }
-                className="w-full flex items-start gap-4 px-4 py-3.5 hover:bg-muted/40 dark:hover:bg-zinc-900/40 transition-colors border-b border-border/40 cursor-pointer select-none"
+                to={`${BASE_PATH}/chat/${conv._id}`}
+                state={{ from: inboxUrl(tab === "mine" ? "assigned" : "open") }}
+                className="group flex w-full items-start gap-3 px-4 py-3.5 transition-colors hover:bg-muted/45 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring sm:px-6"
               >
                 {/* Avatar */}
                 <div className="relative shrink-0">
-                  <div className="w-12 h-12 rounded-full bg-muted text-muted-foreground flex items-center justify-center text-sm font-semibold border border-border/20">
+                  <div className="w-10 h-10 rounded-xl bg-muted text-muted-foreground flex items-center justify-center text-sm font-semibold border border-border/20">
                     {initials}
                   </div>
                   {escalated && (
@@ -377,11 +471,11 @@ export function ConversationsInboxPage({ mode = "all" }: { mode?: Tab }) {
                 {/* Content Area */}
                 <div className="flex-1 min-w-0 py-0.5">
                   <div className="flex items-center justify-between gap-2 mb-1">
-                    <span className="text-[14px] font-semibold text-foreground truncate">
-                      {name}
+                    <span className="min-w-0 truncate text-sm font-semibold text-foreground">
+                      {title}
                     </span>
                     <span
-                      className={`text-[11px] font-medium ${isUnread ? "text-emerald-500 font-semibold" : "text-muted-foreground/80"}`}
+                      className={`shrink-0 text-[11px] font-medium ${isUnread ? "text-emerald-500 font-semibold" : "text-muted-foreground/80"}`}
                     >
                       {getRelativeTime(conv.lastMessageAt || conv.createdAt)}
                     </span>
@@ -402,12 +496,22 @@ export function ConversationsInboxPage({ mode = "all" }: { mode?: Tab }) {
 
                   {/* Channel & Assignment row */}
                   <div className="flex items-center gap-2.5 mt-2 flex-wrap">
-                    <div className="flex items-center gap-1 text-[11px] text-muted-foreground/80 font-medium">
-                      <channelDisplay.Icon
-                        className={`h-3.5 w-3.5 ${channelDisplay.className}`}
-                      />
-                      <span>{channelDisplay.label}</span>
-                    </div>
+                    {channel === "threads" ? (
+                      <ThreadLabel thread={conv.metadata?.thread} />
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground">
+                        <channelDisplay.Icon
+                          className={`size-3.5 ${channelDisplay.className}`}
+                        />
+                        {channelDisplay.label}
+                      </span>
+                    )}
+
+                    {title !== name && (
+                      <span className="min-w-0 truncate text-[11px] text-muted-foreground">
+                        {name}
+                      </span>
+                    )}
 
                     {conv.assignedTo && (
                       <span className="flex items-center gap-1 text-[11px] text-muted-foreground/75 font-medium">
@@ -434,21 +538,15 @@ export function ConversationsInboxPage({ mode = "all" }: { mode?: Tab }) {
                     </span>
                   </div>
                 </div>
-              </div>
+                <ChevronRight
+                  className="mt-0.5 size-4 shrink-0 text-muted-foreground/60 group-hover:text-foreground"
+                  aria-hidden="true"
+                />
+              </Link>
             );
           })
         )}
       </div>
-
-      {/* Footer hint */}
-      {list.length > 0 && (
-        <div className="px-4 py-2 border-t border-border bg-card/30">
-          <p className="text-[11px] text-muted-foreground">
-            {list.length} conversation{list.length !== 1 ? "s" : ""} · Click a
-            row to open the chat
-          </p>
-        </div>
-      )}
     </div>
   );
 }

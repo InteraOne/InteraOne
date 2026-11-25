@@ -16,6 +16,12 @@ import {
 } from "./conversation.types";
 import { assistQueue } from "@shared/infra/queue";
 
+const INBOX_QUEUE_CONDITIONS = [
+  { channel: "threads" },
+  { "metadata.escalatedAt": { $ne: null } },
+  { "metadata.pendingEscalation": true },
+];
+
 function toAssistMessages(messages: any[]) {
   return messages.map((message) => ({
     role:
@@ -38,26 +44,21 @@ export class ConversationService {
     organizationId: string,
     options: ListConversationsOptions,
   ) {
-    const { status, limit = 50, offset = 0, assignedTo, userId } = options;
+    const { status, channel, limit = 50, offset = 0, assignedTo, userId } = options;
 
-    const filter: any = { organizationId };
+    const filter: any = { organizationId, ...(channel && { channel }) };
 
     if (assignedTo === null) {
-      // Specifically requesting unassigned conversations (In Queue)
       filter.assignedTo = null;
-      filter.$or = [
-        { "metadata.escalatedAt": { $ne: null } },
-        { "metadata.pendingEscalation": true },
-      ];
+      filter.$or = INBOX_QUEUE_CONDITIONS;
     } else if (assignedTo) {
       // Specifically requesting conversations for a certain agent
       filter.assignedTo = assignedTo;
     } else {
-      // General view (All Open) - show assigned OR escalated
+      // Include assigned conversations and anything visible in the queue.
       filter.$or = [
         { assignedTo: { $ne: null } },
-        { "metadata.escalatedAt": { $ne: null } },
-        { "metadata.pendingEscalation": true },
+        ...INBOX_QUEUE_CONDITIONS,
       ];
     }
 
@@ -107,7 +108,7 @@ export class ConversationService {
         {
           $match: {
             organizationId: orgIdObj,
-            "metadata.source": "widget",
+            "metadata.source": { $in: ["widget", "threads"] },
             ...(unreadMessageFilters.length > 0
               ? { $or: unreadMessageFilters }
               : { conversationId: { $in: [] } }),
@@ -358,8 +359,8 @@ export class ConversationService {
 
     const agent = await User.findById(agentId).select("name email");
 
-    const updatedConversation = await Conversation.findByIdAndUpdate(
-      conversationId,
+    const updatedConversation = await Conversation.findOneAndUpdate(
+      { _id: conversationId, organizationId },
       {
         $set: {
           assignedTo: agentId,
@@ -430,6 +431,7 @@ export class ConversationService {
       { _id: conversationId, organizationId },
       {
         status: 1,
+        channel: 1,
         assignedTo: 1,
         "metadata.escalatedAt": 1,
         "metadata.humanJoinedAt": 1,
@@ -440,6 +442,7 @@ export class ConversationService {
 
     return {
       status: conv.status,
+      ...(conv.channel === "threads" && { interactionSource: "threads" }),
       assignedTo: conv.assignedTo?.toString() || null,
       metadata: {
         escalatedAt: conv.metadata?.escalatedAt
@@ -499,7 +502,7 @@ export class ConversationService {
 
     const memory = messages.reverse().map((m) => ({
       messageId: m._id.toString(),
-      role: ["widget", "telegram_channel", "whatsapp_channel", "email_channel"].includes(m.metadata?.source) ? "user" : "assistant",
+      role: ["widget", "threads", "telegram_channel", "whatsapp_channel", "email_channel"].includes(m.metadata?.source) ? "user" : "assistant",
       content: m.content,
       senderName: m.metadata?.senderName || null,
       timestamp: m.createdAt,
@@ -597,6 +600,7 @@ export class ConversationService {
   ): Promise<{ closedCount: number }> {
     const cutoffTime = new Date(Date.now() - inactivityLimitMs);
     const inactiveConversations = await Conversation.find({
+      channel: { $ne: "threads" },
       status: { $in: ["open", "pending"] },
       updatedAt: { $lt: cutoffTime },
     });
@@ -652,7 +656,7 @@ export class ConversationService {
             }
           : { sessionId: conv.sessionId },
         messages: messages.map((m) => ({
-          role: ["widget", "telegram_channel", "whatsapp_channel", "email_channel"].includes(m.metadata?.source) ? "user" : "assistant",
+          role: ["widget", "threads", "telegram_channel", "whatsapp_channel", "email_channel"].includes(m.metadata?.source) ? "user" : "assistant",
           content: m.content || "",
         })),
       });
@@ -671,7 +675,7 @@ export class ConversationService {
     try {
       // Fetch active conversations for this organization that:
       // - Are assigned to the user OR
-      // - Are open, unassigned, and escalated (or pending escalation)
+      // - Are unassigned and visible in the inbox queue
       // Sorted by updatedAt desc, limited to 10
       const convs = await Conversation.find({
         organizationId,
@@ -680,10 +684,7 @@ export class ConversationService {
           { assignedTo: userId },
           {
             assignedTo: null,
-            $or: [
-              { "metadata.escalatedAt": { $ne: null } },
-              { "metadata.pendingEscalation": true },
-            ],
+            $or: INBOX_QUEUE_CONDITIONS,
           },
         ],
       })

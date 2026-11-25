@@ -1,4 +1,10 @@
 # ============================================================
+
+{
+    on_demand_tls {
+        ask http://gateway:3002/api/v1/threads/domain-allow
+    }
+}
 # Caddyfile  —  InteraOne reverse proxy
 #
 # Uses Caddy's native environment variable substitution: {$VAR}
@@ -32,6 +38,23 @@
 # ── Web frontend on a separate domain ────────────────────────────────────────
 {$WEB_HOST} {
     reverse_proxy console:3000
+}
+
+# Verified Threads custom domains. The ask endpoint only authorizes a hostname
+# after its ownership record has been verified for an active organization.
+https:// {
+    tls {
+        on_demand
+    }
+    handle /socket.io/* {
+        reverse_proxy gateway:3002
+    }
+    handle /api/* {
+        reverse_proxy gateway:3002
+    }
+    handle {
+        reverse_proxy console:3000
+    }
 }
 
 # ── Silo CDN  (cdn.example.com → silo:9001) ────────────────────────────────

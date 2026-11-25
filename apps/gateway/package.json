@@ -6,6 +6,7 @@
     "node": ">=22.22.3"
   },
   "scripts": {
+    "migrate:threads": "ts-node -r tsconfig-paths/register src/scripts/migrate-threads.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",

@@ -1,5 +1,11 @@
 export { User, IUser } from "./User";
 export { Organization, IOrganization } from "./Organization";
+export {
+  ThreadDomain,
+  IThreadDomain,
+  ThreadDomainStatus,
+  ThreadDomainTlsStatus,
+} from "./ThreadDomain";
 export { Membership, IMembership, MembershipRole } from "./Membership";
 export { Conversation, IConversation } from "./Conversation";
 export { Message, IMessage } from "./Message";

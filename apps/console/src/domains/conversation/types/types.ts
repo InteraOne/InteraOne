@@ -26,6 +26,11 @@ export interface ConversationMessage {
   createdAt: string;
 }
 
+export interface ConversationThread {
+  category: "support" | "discussion" | "feature";
+  public: boolean;
+}
+
 export interface ConversationListItem {
   _id: string;
   participants: ConversationParticipant[];
@@ -47,6 +52,7 @@ export interface ConversationListItem {
   sessionId: string;
   metadata?: {
     source?: string;
+    thread?: ConversationThread;
     customer?: {
       name?: string;
       email?: string;
@@ -80,6 +86,7 @@ export interface ConversationDetail {
   assignedTo?: { _id: string; name: string; email: string };
   tags?: string[];
   metadata: {
+    thread?: ConversationThread;
     customer?: {
       name?: string;
       email?: string;

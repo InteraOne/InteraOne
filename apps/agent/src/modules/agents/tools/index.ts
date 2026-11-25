@@ -32,6 +32,19 @@ export async function getToolsForContext(
   preloadedCustomActions?: Awaited<ReturnType<typeof getCustomActionTools>>,
 ): Promise<ToolResolution> {
   let tools = [...registry.values()];
+  if (options.channel === "threads") {
+    const supportTools = [
+      "faq_retrieval", "knowledge_retrieval", "conversation_memory",
+      "mark_query_resolved", "escalate_to_human", "save_unanswered_question",
+    ];
+    return {
+      tools: tools.filter((tool) => supportTools.includes(tool.name) &&
+        (options.fallbackToAgent !== false || tool.name !== "escalate_to_human")),
+      connectedIntent: false,
+      connectedStatus: "",
+      connectedMessage: "",
+    };
+  }
 
   // If escalation is disabled, exclude escalate_to_human tool completely
   if (options.fallbackToAgent === false) {

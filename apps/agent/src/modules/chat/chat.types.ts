@@ -17,7 +17,7 @@ export interface AIJobData {
   companyName?: string;
   fallbackToAgent?: boolean;
   collectUserInfo?: CollectUserInfo;
-  channel?: "widget" | "email" | "whatsapp" | "telegram";
+  channel?: "widget" | "email" | "whatsapp" | "telegram" | "threads";
   aiEnabled?: boolean;
   subscriptionExpired?: boolean;
 }
@@ -45,12 +45,12 @@ export interface BuildSystemPromptOptions {
   fallbackToAgent: boolean;
   collectUserInfo?: CollectUserInfo;
   knownVisitorDetails?: KnownVisitorDetails;
-  channel?: "widget" | "email" | "whatsapp" | "telegram";
+  channel?: "widget" | "email" | "whatsapp" | "telegram" | "threads";
 }
 
 
 
-export type Channel = "widget" | "email" | "whatsapp" | "telegram";
+export type Channel = "widget" | "email" | "whatsapp" | "telegram" | "threads";
 
 export interface MiddlewareContext {
   job: AIJobData;
