@@ -95,35 +95,6 @@ make all
 | `apps/launcher` | Embeddable widget for websites and products       |
 
 
-### Composio integrations (optional)
-
-[Composio](https://composio.dev) support lets workspace administrators connect external apps and control which actions agents can use. It is disabled by default.
-
-#### Configuration
-
-Add the following variables to the gateway environment:
-
-| Variable | Description |
-| --- | --- |
-| `COMPOSIO_ENABLED` | Set to `true` to enable Composio integrations. |
-| `COMPOSIO_API_KEY` | API key for your Composio project. |
-| `COMPOSIO_REDIRECT_URL` | Console URL used after authorization, such as `https://app.example.com/dashboard/integrations`. |
-| `COMPOSIO_ENVIRONMENT` | Stable name for the deployment, such as `production` or `staging`. |
-
-#### Setup
-
-1. Create a project in Composio.
-2. Enable the managed authentication configurations for the apps you want to support.
-3. Add `COMPOSIO_REDIRECT_URL` to the allowed Connect Link redirects in Composio.
-4. Configure the gateway environment variables and restart `apps/gateway`.
-5. Open **Integrations** in the InteraOne console, select an app, configure its allowed actions, and connect an account.
-
-The Composio SDK is used only by `apps/gateway`. API keys and provider credentials are not sent to the console or `apps/agent`.
-
-Integration policies are scoped to an organization and checked by the gateway on every tool call. Read actions can be enabled when a toolkit is configured; write actions must be explicitly allowed. Destructive actions require user approval. Executions are rate-limited, audited, and deduplicated where applicable.
-
-<hr/>
-
 ## ❤️ Contributors
 
 The humans behind InteraOne 🚀
