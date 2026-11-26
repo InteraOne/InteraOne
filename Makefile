@@ -54,17 +54,17 @@ check-docker: ## Check Docker installation and requirements
 		echo ""; \
 		exit 1; \
 	}
-	@command -v docker-compose >/dev/null 2>&1 || docker compose version >/dev/null 2>&1 || { \
-		echo "$(RED)❌ docker-compose is not installed!$(NC)"; \
+	@node scripts/compose.cjs version >/dev/null 2>&1 || { \
+		echo "$(RED)❌ Docker Compose is not installed!$(NC)"; \
 		echo ""; \
-		echo "$(YELLOW)Please install docker-compose:$(NC)"; \
+		echo "$(YELLOW)Please install Docker Compose:$(NC)"; \
 		echo "  https://docs.docker.com/compose/install/"; \
 		echo ""; \
 		exit 1; \
 	}
 	@echo "$(GREEN)✅ Docker is installed and running$(NC)"
 	@docker --version
-	@docker-compose --version 2>/dev/null || docker compose version
+	@node scripts/compose.cjs version
 
 check-ports: ## Check if required ports are available
 	@echo "$(BLUE)🔍 Checking required ports...$(NC)"
@@ -208,7 +208,7 @@ check-types: ## Type check
 
 docker-start: check-docker ## Start Docker services
 	@echo "$(BLUE)🐳 Starting Docker services...$(NC)"
-	@cd docker && docker-compose -f docker-compose.dev.yml up -d redis mongodb mongo-express mailhog silo qdrant log-viewer || { \
+	@cd docker && node ../scripts/compose.cjs -f docker-compose.dev.yml up -d redis mongodb mongo-express mailhog silo qdrant log-viewer || { \
 		echo "$(RED)❌ Failed to start Docker services!$(NC)"; \
 		echo ""; \
 		echo "$(YELLOW)Common issues:$(NC)"; \
@@ -251,14 +251,14 @@ docker-health: ## Check health of Docker services
 	@echo ""
 
 docker-stop: ## Stop Docker services
-	cd docker && docker-compose -f docker-compose.dev.yml down
+	cd docker && node ../scripts/compose.cjs -f docker-compose.dev.yml down
 
 docker-clean: ## Stop and remove volumes
-	cd docker && docker-compose -f docker-compose.dev.yml down -v
+	cd docker && node ../scripts/compose.cjs -f docker-compose.dev.yml down -v
 
 docker-logs: ## Show Docker logs
 	$(BANNER)
-	cd docker && docker-compose -f docker-compose.dev.yml logs -f
+	cd docker && node ../scripts/compose.cjs -f docker-compose.dev.yml logs -f
 
 launcher-deploy: ## Build and deploy widget to Silo
 	@echo "$(BLUE)📦 Building and deploying widget...$(NC)"
