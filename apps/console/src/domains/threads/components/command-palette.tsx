@@ -36,16 +36,19 @@ export function CommandPalette({
 }: CommandPaletteProps) {
   const [query, setQuery] = useState("");
   const results = useMemo(() => {
-    const needle = query
-      .trim()
-      .toLowerCase()
-      .replace(/^#thr-/, "");
+    const needle = query.trim().toLowerCase();
     if (!needle) return threads.slice(0, 5);
+    const reference = /^#?thr-([0-9a-f]{3})$/.exec(needle);
+    if (reference)
+      return threads
+        .filter((thread) => thread.id.toLowerCase().endsWith(reference[1]))
+        .slice(0, 8);
+    const partialId = needle.replace(/^#thr-/, "");
     return threads
       .filter(
         (thread) =>
           thread.title.toLowerCase().includes(needle) ||
-          thread.id.toLowerCase().includes(needle),
+          thread.id.toLowerCase().includes(partialId),
       )
       .slice(0, 8);
   }, [query, threads]);
@@ -98,7 +101,7 @@ export function CommandPalette({
               </span>
             </button>
           ))}
-          {query && results.length === 0 && (
+          {query.trim() && (
             <button
               type="button"
               onClick={() => closeThen(() => onSearch(query))}

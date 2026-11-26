@@ -134,6 +134,56 @@ describe.skipIf(!process.env.THREADS_TEST_MONGO)(
         .expect(401);
       return "Bearer " + r.body.token;
     }
+    it("finds all visible threads with a displayed reference across pages", async () => {
+      const portal = await Organization.create({
+        name: "Search",
+        slug: "search",
+        threadsEnabled: true,
+      });
+      const path = "/threads/p/search/threads";
+      const thread = (id: string, title: string, shared = true) => ({
+        _id: new mongoose.Types.ObjectId(id),
+        organizationId: portal._id,
+        channel: "threads",
+        sessionId: id,
+        subject: title,
+        metadata: { thread: { public: shared, category: "discussion" } },
+      });
+      const first = thread("100000000000000000000abc", "Delivery [details]");
+      const second = thread("200000000000000000000abc", "Find receipt");
+      await Conversation.insertMany([
+        first,
+        second,
+        thread("300000000000000000000abc", "Private", false),
+        {
+          ...thread("400000000000000000000abc", "Other workspace"),
+          organizationId: new mongoose.Types.ObjectId(),
+        },
+      ]);
+      await Conversation.insertMany(
+        Array.from({ length: 30 }, (_, i) =>
+          thread("abc" + i.toString(16).padStart(21, "0"), "Recent discussion"),
+        ),
+      );
+      const page = await request(app).get(path).expect(200);
+      expect(page.body).toHaveLength(30);
+      expect(page.body.map((row: { title: string }) => row.title)).toEqual(
+        Array(30).fill("Recent discussion"),
+      );
+      for (const q of ["#THR-ABC", "thr-abc"]) {
+        const matches = await request(app).get(path).query({ q }).expect(200);
+        expect(matches.body.map((row: { id: string }) => row.id).sort()).toEqual(
+          [first._id.toString(), second._id.toString()],
+        );
+      }
+      const title = await request(app)
+        .get(path)
+        .query({ q: "[details]" })
+        .expect(200);
+      expect(title.body.map((row: { id: string }) => row.id)).toEqual([
+        first._id.toString(),
+      ]);
+    });
     it("lets a founder configure branding and control whether the portal is available", async () => {
       const settings = {
         enabled: false,

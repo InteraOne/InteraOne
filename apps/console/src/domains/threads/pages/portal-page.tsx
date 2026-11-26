@@ -477,6 +477,7 @@ function Portal({
           else switchView(nextView);
         }}
         onSearch={(value) => {
+          if (threadId || view === "updates") switchView("community");
           setQ(value);
           setPage(0);
         }}
