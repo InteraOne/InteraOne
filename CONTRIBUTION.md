@@ -4,9 +4,9 @@ Thanks for your interest in contributing to InteraOne! Please read these guideli
 
 ## Getting started
 
-- Follow the Quick start guide in README to set up Docker services and run the apps.
-- Use Node.js >= 18 and npm 10+.
-- Copy `.env.development` to `.env` in `apps/gateway` and `apps/console` (adjust as needed).
+- Install Node.js 20 or newer and pnpm 9.15.0 (the version pinned in `package.json`).
+- Start Docker with Docker Compose available, then follow the [README quick start](./README.md). Run the Makefile commands from the repository root in a POSIX shell with GNU Make.
+- `make copy-env` copies the tracked `.env.example` templates to `.env` for the gateway, console, agent, launcher and worker. It preserves existing local settings. The quick start runs this step automatically.
 
 ## Project structure
 
@@ -26,20 +26,23 @@ Thanks for your interest in contributing to InteraOne! Please read these guideli
 4. Ensure code builds, lints, and types check:
 
 ```bash
-npm i
+pnpm install --frozen-lockfile
+pnpm lint
+pnpm --filter @InteraOne/launcher type-check
+pnpm build
 ```
 
 5. Verify the apps run locally:
 
 ```bash
-npm run dev:full
+pnpm run dev:full
 ```
 
 6. Add/update minimal tests where appropriate (if/when test harness exists).
 
 ## Style and quality
 
-- Run `npm run format` before pushing.
+- Run `pnpm run format` before pushing.
 - Follow existing patterns, naming, and folder structure.
 - Validate API changes with helpful error handling and input validation.
 - Avoid committing `.env` files, build artifacts, or large assets.
