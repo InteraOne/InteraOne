@@ -104,7 +104,7 @@ export function CommandPalette({
           {query.trim() && (
             <button
               type="button"
-              onClick={() => closeThen(() => onSearch(query))}
+              onClick={() => closeThen(() => onSearch(query.trim()))}
             >
               <Search />
               <strong>Search all threads for “{query}”</strong>
