@@ -36,22 +36,15 @@
 
 <hr/>
 
-## Why InteraOne?
+## 🔗 Why InteraOne?
 
-|                                          | **InteraOne**      | **Intercom (Fin)** | **Zendesk**              | **Chatwoot**                      |
-| ---------------------------------------- | ------------------ | ------------------ | ------------------------ | --------------------------------- |
-| **Base price**                           | Free & open source | $29–$132/agent/mo  | $55–$169/agent/mo        | $0–$99/agent/mo                   |
-| **AI resolution cost**                   | $0 — unlimited     | $0.99 / resolution | $1.50–$2.00 / resolution | AI credits capped, $20/1k overage |
-| **Self-hosted**                          | ✅ One click       | ❌                 | ❌                       | ✅ (no AI on free tier)           |
-| **Single AI Brain**                      | ✅                 | ❌                 | ❌                       | ❌                                |
-| **WhatsApp + Email + Telegram + Widget** | ✅                 | Partial            | Partial                  | ✅                                |
-| **Agent Latency**                        | ⚡ ~500ms          | Varies             | Varies                   | No native AI on free tier         |
-| **Multiple LLM Providers**               | ✅                 | ❌                 | ❌                       | ❌                                |
-| **RAG Knowledge Base**                   | ✅                 | Limited            | Limited                  | ❌                                |
-| **Ticket + Inbox + Contacts AI**         | ✅                 | Partial            | ✅                       | ❌                                |
-| **QR Code Offline→Online**               | ✅                 | ❌                 | ❌                       | ❌                                |
+|  | **InteraOne** | **Intercom (Fin)** | **Zendesk** | **Chatwoot** |
+|---|---|---|---|---|
+| **Base price** | Free & open source | $29–$132/agent/mo | $55–$169/agent/mo | $0–$99/agent/mo |
+| **AI resolution cost** | $0 — no per-resolution fee* | $0.99 / resolution | $1.50–$2.00 / resolution | AI credits capped, $20/1k overage |
+| **Self-hosted** | ✅ One-click | ❌ | ❌ | ✅ (AI requires paid plan) |
 
-<sub>Pricing as of July 2026 — verify current rates before quoting.</sub>
+*Pricing verified November 2026. Competitor pricing may vary by plan and billing cycle.*
 
 <hr/>
 
