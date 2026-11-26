@@ -94,15 +94,6 @@ make all
 | `apps/worker`   | Background jobs, queues, async processing         |
 | `apps/launcher` | Embeddable widget for websites and products       |
 
-### Threads customer portals
-
-In the dashboard, open **Threads** to publish your organization’s portal at `/threads/<organization-slug>`. Set a headline, upload a logo, choose an accent color, then share the hosted portal URL. Individual threads open at `/threads/<organization-slug>/thread/<thread-id>`. Configure the gateway’s `CLIENT_URL` and platform email provider so customers receive sign-in codes and links to thread updates. The existing email worker delivers both.
-
-Custom domains use real DNS and TLS states. Deployment administrators configure the shared routing and certificate infrastructure once; founders then add their own domains in Threads settings. See [Threads domain deployment and founder setup](docs/threads-domains.md) for the separate workflows and requirements. A domain is not exposed as active until its CNAME, ownership TXT record, and publicly trusted TLS certificate all validate.
-
-Customers can browse public discussions and feature requests, verify their email to participate, and find their own threads under **My threads**. Private support stays with the requester and your staff. Replies, assignment, and resolution use the unified inbox. The optional **AI first for private support** setting uses the existing agent worker and workspace knowledge, with human handoff through the inbox queue.
-
-MongoDB creates the Threads indexes on startup when automatic index creation is enabled. Otherwise run `pnpm --dir apps/gateway migrate:threads` against the deployment database. On local development infrastructure, set `THREADS_TEST_MONGO` to a MongoDB URI with permission to create a temporary test database and run `pnpm --dir apps/gateway test`. The integration tests also use the configured Redis instance.
 
 ### Composio integrations (optional)
 
