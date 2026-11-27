@@ -29,7 +29,7 @@ const THREAD_TYPES = [
   {
     value: "support",
     label: "Question",
-    help: "Ask support or peers for help",
+    help: "Speak privately with the support team",
     heading: "Ask a question",
     description: "Share the context someone needs to give you a useful answer.",
     titlePlaceholder: "What do you need help with?",
@@ -128,7 +128,7 @@ export function NewThreadDialog({
   const selectedType = THREAD_TYPES.find((type) => type.value === category);
   return (
     <Dialog open={open} onOpenChange={changeOpen}>
-      <DialogContent className="threads-compose-dialog [&_h2]:[font-family:var(--font-sans)] [--threads-border:#c7c4d8] [--threads-primary:#5046e5] [border-color:var(--threads-border)] [border-radius:12px] [font-family:var(--font-sans)] [font-size:14px] [line-height:20px] [letter-spacing:var(--tracking-normal)] dark:[--threads-border:var(--border)] dark:[--threads-primary:var(--primary)] dark:[background:var(--popover)] dark:[color:var(--popover-foreground)] [&_button]:[font-family:var(--font-sans)] [&_input]:[font-family:var(--font-sans)] [&_textarea]:[font-family:var(--font-sans)] [&_legend]:[color:var(--foreground)] [&_legend]:[font-size:14px] [&_legend]:[font-weight:500] [&_legend]:[line-height:20px] [&_input]:[font-size:14px] [&_input]:[font-weight:400] [&_input]:[line-height:20px] [&_textarea]:[font-size:14px] [&_textarea]:[font-weight:400] [&_textarea]:[line-height:20px] [&_input::placeholder]:[font-weight:400] [&_textarea::placeholder]:[font-weight:400] [&[data-slot=\'input\']]:[height:36px] [&[data-slot=\'input\']]:[padding-inline:12px] max-h-[92vh] max-w-[672px] gap-0 overflow-y-auto p-0">
+      <DialogContent className="threads-compose-dialog [&_h2]:[font-family:var(--font-sans)] [--threads-border:var(--border)] [--threads-primary:var(--primary)] [border-color:var(--threads-border)] [border-radius:12px] [font-family:var(--font-sans)] [font-size:14px] [line-height:20px] [letter-spacing:var(--tracking-normal)] dark:[--threads-border:var(--border)] dark:[--threads-primary:var(--primary)] dark:[background:var(--popover)] dark:[color:var(--popover-foreground)] [&_button]:[font-family:var(--font-sans)] [&_input]:[font-family:var(--font-sans)] [&_textarea]:[font-family:var(--font-sans)] [&_legend]:[color:var(--foreground)] [&_legend]:[font-size:14px] [&_legend]:[font-weight:500] [&_legend]:[line-height:20px] [&_input]:[font-size:14px] [&_input]:[font-weight:400] [&_input]:[line-height:20px] [&_textarea]:[font-size:14px] [&_textarea]:[font-weight:400] [&_textarea]:[line-height:20px] [&_input::placeholder]:[font-weight:400] [&_textarea::placeholder]:[font-weight:400] [&[data-slot=\'input\']]:[height:36px] [&[data-slot=\'input\']]:[padding-inline:12px] max-h-[92vh] max-w-[672px] gap-0 overflow-y-auto p-0">
         <DialogHeader className="border-b border-[var(--threads-border)] px-6 py-5 pr-14">
           {selectedType && (
             <button

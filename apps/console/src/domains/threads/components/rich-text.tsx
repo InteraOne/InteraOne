@@ -2,12 +2,12 @@ import { Fragment } from "react";
 
 export function RichText({ text }: { text: string }) {
   return (
-    <div className="whitespace-pre-wrap break-words text-sm leading-6 text-foreground/90">
+    <div className="whitespace-pre-wrap break-words text-inherit">
       {text.split(/(```[\s\S]*?```)/g).map((block, index) =>
         block.startsWith("```") ? (
           <pre
             key={index}
-            className="my-3 overflow-x-auto rounded-lg border bg-muted/60 p-4 text-sm"
+            className="my-3 overflow-x-auto rounded-lg border bg-muted/60 p-4 text-[0.9em]"
           >
             <code>{block.slice(3, -3).replace(/^\w*\n/, "")}</code>
           </pre>
@@ -24,7 +24,7 @@ export function RichText({ text }: { text: string }) {
                   return (
                     <code
                       key={i}
-                      className="rounded bg-muted px-1 py-0.5 text-sm"
+                      className="rounded bg-muted px-1 py-0.5 text-[0.9em]"
                     >
                       {part.slice(1, -1)}
                     </code>

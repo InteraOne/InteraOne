@@ -519,6 +519,9 @@ portal.get("/threads", async (req, res) => {
   const category = req.query.category;
   if (category && !categories.some((k) => k === category))
     throw new AppError("Invalid category", 400);
+  const progress = req.query.progress;
+  if (progress && !["under_review", "planned", "in_progress", "shipped"].includes(String(progress)))
+    throw new AppError("Invalid progress", 400);
   const sort = req.query.sort || "latest";
   if (!["latest", "unanswered", "trending", "solved"].includes(String(sort)))
     throw new AppError("Invalid sorting", 400);
@@ -535,6 +538,7 @@ portal.get("/threads", async (req, res) => {
     ...(engagedThreads ? { _id: { $in: engagedThreads } } : {}),
     ...(sort === "solved" ? { status: "resolved" } : {}),
     ...(category ? { $and: [{ "metadata.thread.category": category }] } : {}),
+    ...(progress ? { "metadata.thread.progress": progress === "under_review" ? { $in: ["under_review", null] } : progress } : {}),
   };
   const rows = await Conversation.aggregate([
     {

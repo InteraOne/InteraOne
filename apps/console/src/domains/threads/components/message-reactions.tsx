@@ -43,7 +43,7 @@ export function MessageReactions({
           disabled={disabled}
           aria-pressed={reaction.reacted}
           aria-label={`${reaction.reacted ? "Remove" : "Add"} ${reaction.emoji} reaction`}
-          className={`inline-flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-xs font-medium transition-colors disabled:opacity-60 ${reaction.reacted ? "border-[var(--threads-primary)] bg-[color-mix(in_srgb,var(--threads-primary)_10%,transparent)] text-[var(--threads-primary)]" : "border-border/70 bg-muted/35 hover:border-[var(--threads-primary)] hover:bg-muted"}`}
+          className={`inline-flex h-8 items-center gap-1.5 rounded-full border px-2.5 text-[13px] font-medium transition-colors disabled:opacity-60 ${reaction.reacted ? "border-[var(--threads-primary)] bg-[color-mix(in_srgb,var(--threads-primary)_10%,transparent)] text-[var(--threads-primary)]" : "border-border/70 bg-muted/35 hover:border-[var(--threads-primary)] hover:bg-muted"}`}
           onClick={() => onToggle(reaction.emoji, !reaction.reacted)}
         >
           <span className="text-sm leading-none">{reaction.emoji}</span>
@@ -56,9 +56,9 @@ export function MessageReactions({
             type="button"
             disabled={disabled}
             aria-label="Add emoji reaction"
-            className="grid size-7 place-items-center rounded-full border border-border/70 bg-muted/25 text-muted-foreground transition-colors hover:border-[var(--threads-primary)] hover:bg-muted hover:text-foreground disabled:opacity-60"
+            className="grid size-8 place-items-center rounded-full border border-border/70 bg-muted/25 text-muted-foreground transition-colors hover:border-[var(--threads-primary)] hover:bg-muted hover:text-foreground disabled:opacity-60"
           >
-            <SmilePlus className="size-3.5" />
+            <SmilePlus className="size-4" />
           </button>
         </Popover.Trigger>
         <Popover.Portal>
@@ -68,7 +68,7 @@ export function MessageReactions({
             sideOffset={8}
             className="z-[70] w-72 rounded-xl border bg-popover p-3 text-popover-foreground shadow-xl outline-none data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95"
           >
-            <p className="mb-2 px-1 text-xs font-semibold">
+            <p className="mb-2 px-1 text-[13px] font-semibold">
               React to this message
             </p>
             <div className="grid grid-cols-8 gap-1">
