@@ -1,5 +1,4 @@
 import { Composer } from "../components/composer";
-import "./thread-detail.css";
 import { RichText } from "../components/rich-text";
 import { formatDistanceToNow } from "date-fns";
 import { useEffect, useState } from "react";
@@ -28,6 +27,7 @@ import {
 import { Button } from "@/shared/ui/button";
 import { Textarea } from "@/shared/ui/textarea";
 import { Loader } from "@/shared/ui/loader";
+import { cn } from "@/shared/lib/utils";
 import { DeleteConfirmDialog } from "@/shared/components/delete-confirm-dialog";
 import {
   Dialog,
@@ -40,6 +40,10 @@ import {
 import { PortalAuthDialog } from "../components/portal-auth-dialog";
 import { PortalHeader } from "../components/portal-header";
 import { PortalHome } from "../components/portal-home";
+import {
+  WorkspaceHeading,
+  WorkspaceSectionHeading,
+} from "../components/workspace-structure";
 import { CommandPalette } from "../components/command-palette";
 import { NewThreadDialog } from "../components/new-thread-dialog";
 import { MessageReactions } from "../components/message-reactions";
@@ -64,6 +68,9 @@ const statusLabels: Record<string, string> = {
   in_progress: "In progress",
   shipped: "Shipped",
 };
+
+const threadActionClass =
+  "inline-flex min-h-[34px] items-center justify-center gap-1.5 whitespace-nowrap rounded-[5px] border border-transparent px-[9px] text-[13px] font-bold text-[var(--threads-muted)] hover:bg-[color-mix(in_srgb,var(--threads-primary)_5%,var(--threads-surface))] hover:text-[var(--threads-primary)] focus-visible:outline-2 focus-visible:outline-[var(--threads-primary)] disabled:opacity-50 aria-pressed:bg-[color-mix(in_srgb,var(--threads-primary)_5%,var(--threads-surface))] aria-pressed:text-[var(--threads-primary)]";
 
 function navigateToReply(replyId: string) {
   const target = document.getElementById(`reply-${replyId}`);
@@ -174,7 +181,6 @@ function Portal({
     [commandOpen, setCommandOpen] = useState(false);
   const [composeAfterSignIn, setComposeAfterSignIn] = useState(false);
   const [votingId, setVotingId] = useState("");
-  const [detailLayout, setDetailLayout] = useState<"essay" | "timeline" | "transcript">("timeline");
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [editingReply, setEditingReply] = useState<{
     id: string;
@@ -214,6 +220,17 @@ function Portal({
     category,
   });
   const d = threadId && !detail.error ? detail.data : undefined;
+  const detailOrigin = (location.state as { from?: string } | null)?.from || "";
+  const detailOriginView =
+    detailOrigin.includes("view=mine") ||
+    detailOrigin.includes("view=upvoted") ||
+    detailOrigin.includes("view=following")
+      ? "mine"
+      : detailOrigin.includes("view=feature") || d?.category === "feature"
+        ? "feature"
+        : d?.category === "support"
+          ? "mine"
+          : "community";
   const displayStatus = d
     ? d.category === "feature"
       ? d.progress || "under_review"
@@ -374,7 +391,7 @@ function Portal({
         : detail.error?.message);
   return (
     <main
-      className="threads-portal min-h-screen bg-[var(--threads-surface)] font-sans text-[var(--threads-text)] [--threads-primary:var(--threads-accent)] [--threads-surface:#fff] [--threads-surface-low:#f6f2ff] [--threads-surface-high:#f0ecf9] [--threads-text:#1b1b24] [--threads-muted:#5e5c6d] [--threads-border:#c7c4d8] [--threads-success:#15803d] dark:[--threads-surface:var(--background)] dark:[--threads-surface-low:var(--muted)] dark:[--threads-surface-high:var(--accent)] dark:[--threads-text:var(--foreground)] dark:[--threads-muted:var(--muted-foreground)] dark:[--threads-border:var(--border)]"
+      className="min-h-screen bg-[var(--threads-surface)] font-sans text-sm text-[var(--threads-text)] [--threads-surface:#fffdfc] [--threads-surface-low:#faf5f5] [--threads-surface-high:#f4e9eb] [--threads-text:#261e22] [--threads-muted:#5e5157] [--threads-border:#e7dcdf] [--threads-success:#447a53] [--threads-primary:var(--threads-accent)] [--threads-action-bg:var(--threads-accent)] dark:[--threads-surface:#191719] dark:[--threads-surface-low:#242124] dark:[--threads-surface-high:#302a2e] dark:[--threads-text:#f5f0f1] dark:[--threads-muted:#c9bec3] dark:[--threads-border:#41383d] dark:[--threads-success:#91c49d] dark:[--threads-primary:color-mix(in_srgb,var(--threads-accent)_42%,white)] [&_button:focus-visible]:outline-2 [&_button:focus-visible]:outline-[var(--threads-primary)] [&_a:focus-visible]:outline-2 [&_a:focus-visible]:outline-[var(--threads-primary)] [&_select:focus-visible]:outline-2 [&_select:focus-visible]:outline-[var(--threads-primary)] [&_input:focus-visible]:outline-2 [&_input:focus-visible]:outline-[var(--threads-primary)]"
       style={
         { "--threads-accent": org.data?.accent ?? "#32685b" } as CSSProperties
       }
@@ -382,7 +399,7 @@ function Portal({
       <PortalHeader
         brand={org.data}
         home={home}
-        view={view as PortalView}
+        view={threadId ? detailOriginView : (view as PortalView)}
         signedIn={Boolean(token)}
         unavailable={unavailable}
         busy={busy}
@@ -575,7 +592,11 @@ function Portal({
         description="This reply will be removed from the thread. This action cannot be undone."
         isDeleting={busy}
       />
-      <div className={`min-h-screen bg-[var(--threads-surface)] px-9 pt-6 pb-12 lg:ml-64 max-lg:px-[18px] max-lg:pt-5 ${threadId ? "thread-detail-page" : ""}`}>
+      <div
+        className={
+          "ml-56 min-h-screen px-7 pb-16 max-[900px]:ml-0 max-[900px]:px-6 max-[900px]:pb-[50px] max-[600px]:px-4 max-[600px]:pb-11"
+        }
+      >
         {failure && (
           <p role="alert" className="mb-5 rounded-md border p-3 text-sm">
             {failure}
@@ -596,34 +617,39 @@ function Portal({
         {org.data && !unavailable && (
           <>
             {threadId ? (
-              <header className="relative z-1 mx-auto flex min-h-14 max-w-[1440px] items-center justify-between border-b border-[var(--threads-border)] px-4 max-md:px-0">
+              <header className="relative z-1 flex min-h-[52px] items-center justify-between border-b border-[var(--threads-border)] px-0 max-[600px]:min-h-12">
                 <div className="flex min-w-0 items-center gap-3 max-md:gap-2">
-                <Button
-                  className="rounded-md border border-[var(--threads-border)] text-xs text-[var(--threads-muted)] hover:text-[var(--threads-text)]"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    const from = (location.state as { from?: string } | null)
-                      ?.from;
-                    if (
-                      from &&
-                      (from === home || from.startsWith(home + "?"))
-                    ) {
-                      const query = from.includes("?")
-                        ? from.slice(from.indexOf("?"))
-                        : "";
-                      setCategory(
-                        new URLSearchParams(query).get("category") || "",
-                      );
-                      nav(from);
-                    } else {
-                      setCategory("");
-                      nav(home);
-                    }
-                  }}
-                >
-                  <ArrowLeft /> {d?.category === "feature" ? "Feature requests" : "Community"}
-                </Button>
+                  <Button
+                    className="border-0 bg-transparent pl-0 text-[13px] text-[var(--threads-muted)] hover:text-[var(--threads-primary)]"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      const from = (location.state as { from?: string } | null)
+                        ?.from;
+                      if (
+                        from &&
+                        (from === home || from.startsWith(home + "?"))
+                      ) {
+                        const query = from.includes("?")
+                          ? from.slice(from.indexOf("?"))
+                          : "";
+                        setCategory(
+                          new URLSearchParams(query).get("category") || "",
+                        );
+                        nav(from);
+                      } else {
+                        setCategory("");
+                        nav(home);
+                      }
+                    }}
+                  >
+                    <ArrowLeft />{" "}
+                    {detailOriginView === "mine"
+                      ? "My threads"
+                      : detailOriginView === "feature"
+                        ? "Featured"
+                        : "Community"}
+                  </Button>
                 </div>
               </header>
             ) : (
@@ -660,6 +686,14 @@ function Portal({
                 }}
                 onPageChange={setPage}
                 onVote={vote}
+                onViewChange={switchView}
+                onNewThread={() => {
+                  if (token) setCompose(true);
+                  else {
+                    setComposeAfterSignIn(true);
+                    setAuth(true);
+                  }
+                }}
               />
             )}
             {threadId && detail.isLoading && <ThreadDetailSkeleton />}
@@ -686,304 +720,534 @@ function Portal({
               </section>
             )}
             {d && (
-              <div className="thread-detail-canvas mx-auto max-w-[1080px] pb-24 text-zinc-900 dark:text-zinc-100">
-                <div className="thread-concept-switch flex items-center justify-between gap-4 border-b border-zinc-200 py-3 text-xs dark:border-zinc-800">
-                  <div className="flex items-center gap-1" role="group" aria-label="Conversation layout">
-                    {([ ["essay", "01 / Reading"], ["timeline", "02 / Activity"], ["transcript", "03 / Correspondence"] ] as const).map(([value, label]) => (
-                      <button key={value} type="button" aria-pressed={detailLayout === value} onClick={() => setDetailLayout(value)} className={`px-3 py-2 font-medium transition-colors hover:text-zinc-950 dark:hover:text-white ${detailLayout === value ? "border-b-2 border-current text-zinc-950 dark:text-white" : "text-zinc-500"}`}>{label}</button>
-                    ))}
-                  </div>
-                  <button type="button" onClick={() => setDetailsOpen(true)} className="px-2 py-2 font-medium text-zinc-600 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-white">Details <span aria-hidden="true">↗</span></button>
+              <div className="grid grid-cols-[minmax(0,1fr)_240px] items-start gap-x-8 pb-12 text-[var(--threads-text)] max-[1100px]:grid-cols-[minmax(0,1fr)_205px] max-[1100px]:gap-x-6 max-[980px]:block">
+                <div className="hidden items-center justify-between pt-4 text-xs font-bold uppercase tracking-[0.07em] text-[var(--threads-muted)] max-[980px]:flex [&_button]:text-[13px] [&_button]:font-bold [&_button]:normal-case [&_button]:tracking-normal [&_button]:text-[var(--threads-primary)]">
+                  <span>Conversation</span>
+                  <button type="button" onClick={() => setDetailsOpen(true)}>
+                    Thread details <span aria-hidden="true">↗</span>
+                  </button>
                 </div>
-                <article className={`threads-discussion threads-discussion--${detailLayout} mx-auto max-w-[760px] ${detailLayout === "transcript" ? "max-w-[920px]" : ""}`}>
-
-                <header
-                  id={opening ? `reply-${opening.id}` : undefined}
-                  tabIndex={opening ? -1 : undefined}
-                  className="threads-detail-opening w-full pt-10 pb-7 focus:outline-none"
-                >
-                  <div className="border-b border-zinc-200 pb-6 dark:border-zinc-800">
-                    <div className="mb-4 flex flex-wrap items-center gap-2 text-xs text-zinc-500">
-                      <span className="font-semibold text-zinc-900 dark:text-zinc-100">{labels[d.category]}</span>
+                <WorkspaceHeading
+                  className="col-start-1 row-start-1 border-b-0 pt-6 pb-0 max-[600px]:pt-4 [&_h1]:max-w-[46ch] [&_h1]:text-[clamp(29px,3vw,38px)] [&_h1]:leading-[1.18] max-[600px]:[&_h1]:text-[28px]"
+                  eyebrow={
+                    <div className="flex flex-wrap items-center gap-2 text-[13px] font-semibold normal-case tracking-normal text-[var(--threads-muted)] [&>span:first-child]:text-[var(--threads-primary)]">
+                      <span>{labels[d.category]}</span>
                       <span aria-hidden="true">/</span>
-                      <span>{d.public ? "Public conversation" : "Private conversation"}</span>
+                      <span>
+                        {d.public
+                          ? "Public conversation"
+                          : "Private conversation"}
+                      </span>
+                      <span aria-hidden="true">/</span>
+                      <span
+                        className={`inline-flex items-center gap-1.5 ${["resolved", "shipped"].includes(displayStatus) ? "text-[var(--threads-success)]" : "text-[var(--threads-primary)]"}`}
+                      >
+                        <span className="size-1.5 rounded-full bg-current" />
+                        {statusLabels[displayStatus] || displayStatus}
+                      </span>
                     </div>
-                    <h1 className="text-[32px] leading-[1.12] font-semibold tracking-[-0.045em] text-zinc-950 sm:text-[42px] dark:text-white">{d.title}</h1>
-                    <div className="thread-opening-byline mt-6 flex flex-wrap items-center justify-between gap-4">
-                      <div className="flex items-center gap-3">
-                        <span className="grid size-9 shrink-0 place-items-center rounded-full bg-slate-900 text-sm font-semibold text-white dark:bg-slate-700">
+                  }
+                  title={d.title}
+                  footer={
+                    <div className="flex items-center justify-between gap-4 max-[600px]:flex-col max-[600px]:items-start">
+                      <div className="flex min-w-0 items-center gap-3">
+                        <span className="grid size-[33px] shrink-0 place-items-center rounded-full bg-[var(--threads-action-bg)] text-[13px] font-bold text-white">
                           {opening?.author.slice(0, 1).toUpperCase() || "?"}
                         </span>
-                        <div className="text-[13px] leading-5">
-                          <p className="font-semibold text-slate-900 dark:text-slate-100">{opening?.author || "Member"}</p>
-                          <time dateTime={opening?.at} className="text-slate-500 dark:text-slate-400">
-                            Posted {opening ? new Date(opening.at).toLocaleDateString(undefined, { dateStyle: "medium" }) : "recently"}
+                        <span className="grid min-w-0 gap-0.5">
+                          <strong className="truncate text-sm font-bold text-[var(--threads-text)]">
+                            {opening?.author || "Member"}
+                          </strong>
+                          <time
+                            className="text-xs text-[var(--threads-muted)]"
+                            dateTime={opening?.at}
+                          >
+                            {opening
+                              ? new Date(opening.at).toLocaleDateString(
+                                  undefined,
+                                  { dateStyle: "medium" },
+                                )
+                              : "Recently"}
                           </time>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <span className="inline-flex items-center gap-1.5 text-xs font-medium text-zinc-600 dark:text-zinc-400">
-                          <span className={`size-1.5 rounded-full ${["resolved", "shipped"].includes(displayStatus) ? "bg-emerald-600" : "bg-teal-600"}`} />
-                          {statusLabels[displayStatus] || displayStatus}
                         </span>
-                        {d.category === "feature" && d.public && (
-                          <button type="button" aria-pressed={d.voted} disabled={busy || votingId === d.id}
-                            aria-label={`${d.voted ? "Remove upvote from" : "Upvote"} ${d.title}`}
-                            onClick={() => vote(d)}
-                            className={`inline-flex h-9 items-center gap-2 border-b text-[13px] font-semibold transition-colors ${d.voted ? "border-zinc-900 text-zinc-950 dark:text-white" : "border-transparent text-zinc-600 hover:border-zinc-900 hover:text-zinc-950 dark:text-zinc-400"}`}>
-                            <ArrowUp className="size-4" /> {d.votes} <span className="hidden sm:inline">{d.voted ? "Upvoted" : "Upvote"}</span>
-                          </button>
-                        )}
                       </div>
                     </div>
-                  </div>
-                  {opening && (
-                      <div className="mt-6">
-                        <RichText text={opening.text} />
-                        <Attachments
-                          files={opening.attachments}
-                          base={base}
-                          threadId={d.id}
-                          token={token}
-                        />
-                        <MessageReactions
-                          reactions={opening.reactions}
-                          disabled={busy}
-                          onToggle={(emoji, reacted) =>
-                            toggleReaction(opening.id, emoji, reacted)
-                          }
-                        />
-                      </div>
-                  )}
-                  <div className="thread-opening-actions mt-[18px] flex flex-wrap items-center gap-[7px]">
-                    {opening && d.status === "open" && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => startReply(opening)}
-                      >
-                        <ReplyIcon /> Reply
-                      </Button>
-                    )}
-                    <Button variant="ghost" size="sm" disabled={busy} aria-pressed={!!d.following}
-                      onClick={() => token ? void act(() => threadsApi.follow(base, d.id, token, !d.following)) : setAuth(true)}>
-                      <Bell /> {d.following ? "Following" : "Follow"}
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        const url = new URL(
-                          threadPath(d.id),
-                          window.location.origin,
-                        );
-                        void navigator.clipboard
-                          .writeText(url.href)
-                          .then(() => toast.success("Thread link copied"))
-                          .catch(() =>
-                            toast.error("Could not copy the thread link"),
-                          );
-                      }}
-                    >
-                      <Link2 /> Copy link
-                    </Button>
-                  </div>
-                </header>
-                <div className="thread-reply-count flex items-center justify-between gap-3 border-b border-zinc-200 py-4 text-zinc-500 dark:border-zinc-800">
-                  <span className="text-xs font-medium">{d.replyCount ?? 0} {d.replyCount === 1 ? "reply" : "replies"}</span>
-                  
-                </div>
-                {(displayStatus !== "open" && displayStatus !== "under_review") && (
-                  <div className="my-5 flex items-center gap-3 border-l border-slate-200 py-2 pl-4 text-[13px] text-slate-500 dark:border-slate-800" role="status">
-                    <span className={`size-2 shrink-0 rounded-full ${["resolved", "shipped"].includes(displayStatus) ? "bg-[var(--threads-success)]" : displayStatus === "closed" ? "bg-[var(--threads-muted)]" : "bg-[var(--threads-primary)]"}`} />
-                    <span>Current status: <strong className="font-semibold text-[var(--threads-text)]">{statusLabels[displayStatus] || displayStatus}</strong></span>
-                  </div>
-                )}
-                {d.more && (
-                  <Button
-                    variant="ghost"
-                    onClick={() =>
-                      setHistory({ id: d.id, before: d.messages[0].id })
-                    }
+                  }
+                />
+                <article className="col-start-1 row-start-2 min-w-0">
+                  <section
+                    id={opening ? `reply-${opening.id}` : undefined}
+                    tabIndex={opening ? -1 : undefined}
+                    className="border-b border-[var(--threads-border)] pt-4 pb-6 scroll-mt-20 focus:outline-none"
+                    aria-label="Original post"
                   >
-                    Earlier replies
-                  </Button>
-                )}
-                {before && (
-                  <Button variant="ghost" onClick={() => setHistory(null)}>
-                    Latest replies
-                  </Button>
-                )}
-                {!replies.length && (
-                  <div className="py-12 text-center">
-                    <p className="text-sm font-medium">No replies yet</p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      Be the first to continue this conversation.
-                    </p>
-                  </div>
-                )}
-                {replies.map((m) => {
-                  const official = m.author.toLowerCase().includes("support team");
-                  return (
-                    <section key={m.id} id={`reply-${m.id}`} tabIndex={-1}
-                      className={`thread-response group relative border-b border-zinc-200 py-7 pl-12 focus:outline-none dark:border-zinc-800 ${official ? "thread-response--official" : ""} [&.threads-reply-target]:outline [&.threads-reply-target]:outline-1`}>
-                      <span className={`thread-response-avatar absolute left-1 top-7 z-10 grid size-8 place-items-center rounded-full text-xs font-semibold ${official ? "bg-zinc-900 text-white dark:bg-white dark:text-zinc-900" : "bg-zinc-200 text-zinc-800 dark:bg-zinc-800 dark:text-white"}`}>
-                        {m.author === "AI assistant" ? <Sparkles className="size-4" /> : m.author.slice(0, 1).toUpperCase()}
-                      </span>
-                      <header className="flex min-w-0 items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <strong className="text-[14px] font-semibold text-slate-950 dark:text-white">{m.author}</strong>
-                            {official && <span className="text-[11px] font-medium text-zinc-500">Official response</span>}
-                            {m.author === "AI assistant" && <span className="text-[12px] font-medium text-slate-500">AI assistant</span>}
-                            {d.acceptedReplyId === m.id && <span className="inline-flex items-center gap-1 text-[12px] font-medium text-emerald-700"><CircleCheckBig className="size-3.5" /> Accepted solution</span>}
-                          </div>
-                          <time dateTime={m.at} className="mt-0.5 block text-[12px] text-slate-500 dark:text-slate-400">
-                            {formatDistanceToNow(new Date(m.at), { addSuffix: true })}{m.edited ? " · Edited" : ""}
-                          </time>
-                        </div>
-                        <DropdownMenu.Root>
-                          <DropdownMenu.Trigger asChild>
-                            <button type="button" aria-label={`Actions for ${m.author}'s reply`} className="grid size-8 shrink-0 place-items-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-2 focus-visible:outline-teal-600 dark:hover:bg-slate-800"><MoreHorizontal className="size-[18px]" /></button>
-                          </DropdownMenu.Trigger>
-                          <DropdownMenu.Portal>
-                            <DropdownMenu.Content align="end" sideOffset={5} className="z-50 min-w-40 rounded-lg border border-slate-200 bg-white p-1 shadow-lg dark:border-slate-700 dark:bg-slate-900">
-                              <DropdownMenu.Item onSelect={() => { void navigator.clipboard.writeText(`${window.location.origin}${threadPath(d.id)}#reply-${m.id}`).then(() => toast.success("Reply link copied")).catch(() => toast.error("Could not copy reply link")); }} className="cursor-pointer rounded px-3 py-2 text-[13px] outline-none hover:bg-slate-50 focus:bg-slate-50 dark:hover:bg-slate-800">Copy link</DropdownMenu.Item>
-                              {token && m.own && !m.deleted && <>
-                                <DropdownMenu.Item onSelect={() => setEditingReply({ id: m.id, text: m.text })} className="cursor-pointer rounded px-3 py-2 text-[13px] outline-none hover:bg-slate-50 focus:bg-slate-50 dark:hover:bg-slate-800">Edit reply</DropdownMenu.Item>
-                                <DropdownMenu.Item onSelect={() => setDeletingReply({ id: m.id, text: m.text })} className="cursor-pointer rounded px-3 py-2 text-[13px] text-red-600 outline-none hover:bg-red-50 focus:bg-red-50">Delete reply</DropdownMenu.Item>
-                              </>}
-                            </DropdownMenu.Content>
-                          </DropdownMenu.Portal>
-                        </DropdownMenu.Root>
-                      </header>
-                      <div className="mt-4 text-[15px] leading-7 text-slate-700 dark:text-slate-300">
-                        {m.replyTo && <ReplyReference replyTo={m.replyTo} />}
-                        <RichText text={m.text} />
-                        <Attachments files={m.attachments} base={base} threadId={d.id} token={token} />
-                      </div>
-                      {!m.deleted && <div className="thread-response-actions mt-3 flex flex-wrap items-center gap-4 [&_[aria-label='Message_reactions']]:mt-0"><MessageReactions reactions={m.reactions} disabled={busy} onToggle={(emoji, reacted) => toggleReaction(m.id, emoji, reacted)} />{d.status === "open" && <button type="button" onClick={() => startReply(m)} className="inline-flex items-center gap-1.5 text-xs font-medium text-zinc-500 hover:text-zinc-950 dark:hover:text-white"><ReplyIcon className="size-3.5" /> Reply</button>}</div>}
-                    </section>
-                  );
-                })}
-                {token && d.category === "support" && (
-                  <div className="mt-6 flex flex-wrap items-center gap-3 border-t border-slate-200 py-5 text-[13px] text-slate-500">
-                    {d.status === "open" && d.humanSupport && (
-                      <p className="text-sm text-muted-foreground">
-                        With the support team
-                      </p>
-                    )}
-                    {d.status === "open" && !d.humanSupport && (
-                      <Button
-                        variant="outline"
-                        disabled={busy}
-                        onClick={() =>
-                          void act(async () => {
-                            await threadsApi.escalate(base, d.id, token);
-                          })
-                        }
-                      >
-                        Request a team member
-                      </Button>
-                    )}
-                    {(d.status === "open" || d.status === "resolved") && (
-                      <Button
-                        variant="outline"
-                        disabled={busy}
-                        onClick={() =>
-                          void act(async () => {
-                            await threadsApi.updateStatus(
-                              base,
-                              d.id,
-                              token,
-                              d.status === "open" ? "resolved" : "open",
-                            );
-                          })
-                        }
-                      >
-                        {d.status === "open"
-                          ? "Mark as resolved"
-                          : "Reopen thread"}
-                      </Button>
-                    )}
-                  </div>
-                )}
-                {d.status === "open" &&
-                  (token ? (
-                    <form
-                      key={d.messages.at(-1)?.id || d.id}
-                      id="thread-reply-form"
-                      onSubmit={submit}
-                      className="thread-reply-composer mt-8 border-t border-zinc-300 pt-5 dark:border-zinc-700"
-                    >
-                      {replyTo && (
-                        <div className="threads-reply-context [display:flex] [align-items:flex-start] [gap:10px] [padding:9px_10px] [border-radius:8px] [color:var(--threads-text)] [background:color-mix(_in_srgb,_var(--threads-primary)_6%,_var(--threads-surface)_)] [box-shadow:inset_3px_0_var(--threads-primary)]">
-                          <button
-                            type="button"
-                            className="min-w-0 flex-1 text-left hover:text-[var(--threads-primary)]"
-                            onClick={() => navigateToReply(replyTo.id)}
-                          >
-                            <p className="text-xs font-semibold">
-                              Replying to {replyTo.author}
-                            </p>
-                            <p className="mt-0.5 line-clamp-2 text-xs leading-5 text-muted-foreground">
-                              {replyTo.text}
-                            </p>
-                          </button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon-xs"
-                            aria-label="Cancel message reply"
-                            onClick={() => setReplyTo(null)}
-                          >
-                            ×
-                          </Button>
-                          <input
-                            type="hidden"
-                            name="replyToId"
-                            value={replyTo.id}
+                    {opening && (
+                      <>
+                        <div className="max-w-[72ch] text-base leading-[1.65] text-[var(--threads-text)]">
+                          <RichText text={opening.text} />
+                          <Attachments
+                            files={opening.attachments}
+                            base={base}
+                            threadId={d.id}
+                            token={token}
                           />
                         </div>
-                      )}
-                      <Composer
-                        key={d.messages.at(-1)?.id || "new"}
-                        base={base}
-                        token={token}
-                        focusKey={replyTo?.id}
-                        reply
-                        action={
-                          <Button
-                            className="ml-auto h-8 rounded-md bg-zinc-900 px-4 text-[13px] font-semibold text-white hover:bg-zinc-700 dark:bg-white dark:text-zinc-900"
+                        <div className="mt-4 flex flex-wrap items-center justify-start gap-x-4 gap-y-3 [&_[aria-label='Message_reactions']]:mt-0">
+                          <MessageReactions
+                            reactions={opening.reactions}
                             disabled={busy}
+                            onToggle={(emoji, reacted) =>
+                              toggleReaction(opening.id, emoji, reacted)
+                            }
+                          />
+                          <div className="flex flex-wrap justify-start gap-2">
+                            {d.category === "feature" && d.public && (
+                              <button
+                                type="button"
+                                className={cn(threadActionClass, "text-[var(--threads-primary)]")}
+                                aria-pressed={d.voted}
+                                disabled={busy || votingId === d.id}
+                                aria-label={`${d.voted ? "Remove upvote from" : "Upvote"} ${d.title}`}
+                                onClick={() => vote(d)}
+                              >
+                                <ArrowUp size={15} /> <span>{d.votes}</span>{" "}
+                                <span>{d.voted ? "Upvoted" : "Upvote"}</span>
+                              </button>
+                            )}
+                            {opening && d.status === "open" && (
+                              <button
+                                type="button"
+                                className={threadActionClass}
+                                onClick={() => startReply(opening)}
+                              >
+                                <ReplyIcon size={15} /> Reply
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              className={threadActionClass}
+                              disabled={busy}
+                              aria-pressed={!!d.following}
+                              onClick={() =>
+                                token
+                                  ? void act(() =>
+                                      threadsApi.follow(
+                                        base,
+                                        d.id,
+                                        token,
+                                        !d.following,
+                                      ),
+                                    )
+                                  : setAuth(true)
+                              }
+                            >
+                              <Bell size={15} />{" "}
+                              {d.following ? "Following" : "Follow"}
+                            </button>
+                            <button
+                              type="button"
+                              className={threadActionClass}
+                              onClick={() => {
+                                const url = new URL(
+                                  threadPath(d.id),
+                                  window.location.origin,
+                                );
+                                void navigator.clipboard
+                                  .writeText(url.href)
+                                  .then(() =>
+                                    toast.success("Thread link copied"),
+                                  )
+                                  .catch(() =>
+                                    toast.error(
+                                      "Could not copy the thread link",
+                                    ),
+                                  );
+                              }}
+                            >
+                              <Link2 size={15} /> Copy link
+                            </button>
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </section>
+                  <section aria-label="Replies">
+                    <WorkspaceSectionHeading
+                      className="min-h-[50px] border-b border-[var(--threads-border)] py-2 [&_h2]:text-[15px] [&_button]:text-[13px] [&_button]:font-bold [&_button]:text-[var(--threads-primary)] [&_button:hover]:underline"
+                      title={`${d.replyCount ?? 0} ${d.replyCount === 1 ? "reply" : "replies"}`}
+                      action={
+                        d.more ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setHistory({ id: d.id, before: d.messages[0].id })
+                            }
                           >
-                            {busy ? <Loader size="sm" /> : "Post reply"}
-                          </Button>
-                        }
-                      />
-                    </form>
-                  ) : (
-                    <div className="threads-signin-reply [display:flex] [align-items:center] [justify-content:space-between] [gap:16px] [margin:24px_32px_32px_8px] [padding:20px] [border:1px_solid_var(--threads-border)] [border-radius:14px] [background:var(--threads-surface)] max-[767px]:[margin-right:0] max-[767px]:[margin-left:0]">
-                      <div>
-                        <p className="text-sm font-medium">
-                          Join the conversation
-                        </p>
+                            Earlier replies
+                          </button>
+                        ) : before ? (
+                          <button
+                            type="button"
+                            onClick={() => setHistory(null)}
+                          >
+                            Latest replies
+                          </button>
+                        ) : undefined
+                      }
+                    />
+                    {!replies.length && (
+                      <div className="py-12 text-center">
+                        <p className="text-sm font-medium">No replies yet</p>
                         <p className="mt-1 text-xs text-muted-foreground">
-                          Sign in with your email to post a reply or follow
-                          updates.
+                          Be the first to continue this conversation.
                         </p>
                       </div>
-                      <Button onClick={() => setAuth(true)}>
-                        Sign in to reply
-                      </Button>
+                    )}
+                    {replies.map((m) => {
+                      const official = m.author
+                        .toLowerCase()
+                        .includes("support team");
+                      return (
+                        <section
+                          key={m.id}
+                          id={`reply-${m.id}`}
+                          tabIndex={-1}
+                          className="group grid grid-cols-[34px_minmax(0,1fr)] gap-x-3 border-b border-[var(--threads-border)] py-6 scroll-mt-[76px] focus:outline-none [&.threads-reply-target]:outline [&.threads-reply-target]:outline-1 max-[600px]:grid-cols-[30px_minmax(0,1fr)] max-[600px]:gap-x-2 max-[600px]:py-4"
+                        >
+                          <span
+                            className={`col-start-1 row-start-1 row-span-3 grid size-[31px] place-items-center rounded-full text-xs font-semibold max-[600px]:size-7 ${official ? "bg-[var(--threads-action-bg)] text-white" : "bg-[var(--threads-surface-high)] text-[var(--threads-text)]"}`}
+                          >
+                            {m.author === "AI assistant" ? (
+                              <Sparkles className="size-4" />
+                            ) : (
+                              m.author.slice(0, 1).toUpperCase()
+                            )}
+                          </span>
+                          <header className="col-start-2 row-start-1 flex min-w-0 items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <strong className="text-sm font-semibold text-[var(--threads-text)]">
+                                  {m.author}
+                                </strong>
+                                {official && (
+                                  <span className="rounded-[3px] bg-[color-mix(in_srgb,var(--threads-primary)_9%,var(--threads-surface))] px-1.5 py-0.5 text-xs font-bold text-[var(--threads-primary)]">
+                                    Official response
+                                  </span>
+                                )}
+                                {m.author === "AI assistant" && (
+                                  <span className="rounded-[3px] bg-[color-mix(in_srgb,var(--threads-primary)_9%,var(--threads-surface))] px-1.5 py-0.5 text-xs font-bold text-[var(--threads-primary)]">
+                                    Automated reply
+                                  </span>
+                                )}
+                                {d.acceptedReplyId === m.id && (
+                                  <span className="inline-flex items-center gap-1 text-[12px] font-medium text-emerald-700">
+                                    <CircleCheckBig className="size-3.5" />{" "}
+                                    Accepted solution
+                                  </span>
+                                )}
+                              </div>
+                              <time
+                                dateTime={m.at}
+                                className="mt-0.5 block text-xs text-[var(--threads-muted)]"
+                              >
+                                {formatDistanceToNow(new Date(m.at), {
+                                  addSuffix: true,
+                                })}
+                                {m.edited ? " · Edited" : ""}
+                              </time>
+                            </div>
+                            <DropdownMenu.Root>
+                              <DropdownMenu.Trigger asChild>
+                                <button
+                                  type="button"
+                                  aria-label={`Actions for ${m.author}'s reply`}
+                                  className="grid size-8 shrink-0 place-items-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-2 focus-visible:outline-teal-600 dark:hover:bg-slate-800"
+                                >
+                                  <MoreHorizontal className="size-[18px]" />
+                                </button>
+                              </DropdownMenu.Trigger>
+                              <DropdownMenu.Portal>
+                                <DropdownMenu.Content
+                                  align="end"
+                                  sideOffset={5}
+                                  className="z-50 min-w-40 rounded-lg border border-slate-200 bg-white p-1 shadow-lg dark:border-slate-700 dark:bg-slate-900"
+                                >
+                                  <DropdownMenu.Item
+                                    onSelect={() => {
+                                      void navigator.clipboard
+                                        .writeText(
+                                          `${window.location.origin}${threadPath(d.id)}#reply-${m.id}`,
+                                        )
+                                        .then(() =>
+                                          toast.success("Reply link copied"),
+                                        )
+                                        .catch(() =>
+                                          toast.error(
+                                            "Could not copy reply link",
+                                          ),
+                                        );
+                                    }}
+                                    className="cursor-pointer rounded px-3 py-2 text-[13px] outline-none hover:bg-slate-50 focus:bg-slate-50 dark:hover:bg-slate-800"
+                                  >
+                                    Copy link
+                                  </DropdownMenu.Item>
+                                  {token && m.own && !m.deleted && (
+                                    <>
+                                      <DropdownMenu.Item
+                                        onSelect={() =>
+                                          setEditingReply({
+                                            id: m.id,
+                                            text: m.text,
+                                          })
+                                        }
+                                        className="cursor-pointer rounded px-3 py-2 text-[13px] outline-none hover:bg-slate-50 focus:bg-slate-50 dark:hover:bg-slate-800"
+                                      >
+                                        Edit reply
+                                      </DropdownMenu.Item>
+                                      <DropdownMenu.Item
+                                        onSelect={() =>
+                                          setDeletingReply({
+                                            id: m.id,
+                                            text: m.text,
+                                          })
+                                        }
+                                        className="cursor-pointer rounded px-3 py-2 text-[13px] text-red-600 outline-none hover:bg-red-50 focus:bg-red-50"
+                                      >
+                                        Delete reply
+                                      </DropdownMenu.Item>
+                                    </>
+                                  )}
+                                </DropdownMenu.Content>
+                              </DropdownMenu.Portal>
+                            </DropdownMenu.Root>
+                          </header>
+                          <div className="col-start-2 row-start-2 mt-3 max-w-[72ch] text-base leading-[1.65] text-[var(--threads-text)]">
+                            {m.replyTo && (
+                              <ReplyReference replyTo={m.replyTo} />
+                            )}
+                            <RichText text={m.text} />
+                            <Attachments
+                              files={m.attachments}
+                              base={base}
+                              threadId={d.id}
+                              token={token}
+                            />
+                          </div>
+                          {!m.deleted && (
+                            <div className="col-start-2 row-start-3 mt-3 flex flex-wrap items-center gap-4 text-[13px] [&_[aria-label='Message_reactions']]:mt-0">
+                              <MessageReactions
+                                reactions={m.reactions}
+                                disabled={busy}
+                                onToggle={(emoji, reacted) =>
+                                  toggleReaction(m.id, emoji, reacted)
+                                }
+                              />
+                              {d.status === "open" && (
+                                <button
+                                  type="button"
+                                  onClick={() => startReply(m)}
+                                  className="inline-flex items-center gap-1.5 text-[13px] font-medium text-[var(--threads-muted)] hover:text-[var(--threads-primary)]"
+                                >
+                                  <ReplyIcon className="size-3.5" /> Reply
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </section>
+                      );
+                    })}
+                  </section>
+                  {token && d.category === "support" && (
+                    <div className="flex flex-wrap items-center gap-3 pt-4 text-[13px] text-[var(--threads-muted)] [&_button]:border-[var(--threads-border)] [&_button]:bg-[var(--threads-surface)] [&_button]:text-[var(--threads-primary)] [&_button:hover]:border-[var(--threads-primary)] [&_button:hover]:bg-[var(--threads-surface-low)]">
+                      {d.status === "open" && d.humanSupport && (
+                        <p className="text-sm text-[var(--threads-muted)]">
+                          With the support team
+                        </p>
+                      )}
+                      {d.status === "open" && !d.humanSupport && (
+                        <Button
+                          variant="outline"
+                          disabled={busy}
+                          onClick={() =>
+                            void act(async () => {
+                              await threadsApi.escalate(base, d.id, token);
+                            })
+                          }
+                        >
+                          Request a team member
+                        </Button>
+                      )}
+                      {(d.status === "open" || d.status === "resolved") && (
+                        <Button
+                          variant="outline"
+                          disabled={busy}
+                          onClick={() =>
+                            void act(async () => {
+                              await threadsApi.updateStatus(
+                                base,
+                                d.id,
+                                token,
+                                d.status === "open" ? "resolved" : "open",
+                              );
+                            })
+                          }
+                        >
+                          {d.status === "open"
+                            ? "Mark as resolved"
+                            : "Reopen thread"}
+                        </Button>
+                      )}
                     </div>
-                  ))}
+                  )}
+                  {d.status === "open" &&
+                    (token ? (
+                      <form
+                        key={d.messages.at(-1)?.id || d.id}
+                        id="thread-reply-form"
+                        onSubmit={submit}
+                        className={`pt-6 ${d.category === "support" ? "mt-0" : "mt-6 border-t border-[var(--threads-border)]"}`}
+                      >
+                        <div className="mb-4 [&_h2]:text-[15px] [&_h2]:font-bold [&_h2]:text-[var(--threads-text)] [&_p]:mt-[3px] [&_p]:text-[13px] [&_p]:text-[var(--threads-muted)]">
+                          <h2>Write a reply</h2>
+                          <p>
+                            Keep the conversation going with a helpful response.
+                          </p>
+                        </div>
+                        {replyTo && (
+                          <div className="threads-reply-context [display:flex] [align-items:flex-start] [gap:10px] [padding:9px_10px] [border-radius:8px] [color:var(--threads-text)] [background:color-mix(_in_srgb,_var(--threads-primary)_6%,_var(--threads-surface)_)] [box-shadow:inset_3px_0_var(--threads-primary)]">
+                            <button
+                              type="button"
+                              className="min-w-0 flex-1 text-left hover:text-[var(--threads-primary)]"
+                              onClick={() => navigateToReply(replyTo.id)}
+                            >
+                              <p className="text-xs font-semibold">
+                                Replying to {replyTo.author}
+                              </p>
+                              <p className="mt-0.5 line-clamp-2 text-xs leading-5 text-muted-foreground">
+                                {replyTo.text}
+                              </p>
+                            </button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon-xs"
+                              aria-label="Cancel message reply"
+                              onClick={() => setReplyTo(null)}
+                            >
+                              ×
+                            </Button>
+                            <input
+                              type="hidden"
+                              name="replyToId"
+                              value={replyTo.id}
+                            />
+                          </div>
+                        )}
+                        <Composer
+                          key={d.messages.at(-1)?.id || "new"}
+                          base={base}
+                          token={token}
+                          focusKey={replyTo?.id}
+                          reply
+                          action={
+                            <Button
+                              className="ml-auto h-8 rounded-md bg-[var(--threads-action-bg)] px-4 text-[13px] font-semibold text-white hover:brightness-90"
+                              disabled={busy}
+                            >
+                              {busy ? <Loader size="sm" /> : "Post reply"}
+                            </Button>
+                          }
+                        />
+                      </form>
+                    ) : (
+                      <div className="mx-8 mt-6 mb-8 flex items-center justify-between gap-4 rounded-[14px] border border-[var(--threads-border)] bg-[var(--threads-surface)] p-5 max-[767px]:mx-0">
+                        <div>
+                          <p className="text-sm font-medium">
+                            Join the conversation
+                          </p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            Sign in with your email to post a reply or follow
+                            updates.
+                          </p>
+                        </div>
+                        <Button onClick={() => setAuth(true)}>
+                          Sign in to reply
+                        </Button>
+                      </div>
+                    ))}
                 </article>
+                <aside
+                  className="sticky top-6 col-start-2 row-start-1 row-span-2 min-w-0 border-l border-[var(--threads-border)] pt-6 pl-6 max-[1100px]:pl-4 max-[980px]:hidden"
+                  aria-label="Conversation details"
+                >
+                  <div>
+                    <h2 className="border-b border-[var(--threads-border)] pb-3 text-sm font-bold text-[var(--threads-text)]">
+                      Thread details
+                    </h2>
+                    <dl className="grid gap-3 py-4 [&>div]:flex [&>div]:justify-between [&>div]:gap-3 [&>div]:text-[13px] [&>div]:leading-normal [&_dt]:text-[var(--threads-muted)] [&_dd]:text-right [&_dd]:font-semibold [&_dd]:text-[var(--threads-text)]">
+                      <div>
+                        <dt>Visibility</dt>
+                        <dd>{d.public ? "Public" : "Private"}</dd>
+                      </div>
+                      <div>
+                        <dt>Participants</dt>
+                        <dd>{d.participantCount ?? 0}</dd>
+                      </div>
+                      <div>
+                        <dt>Updated</dt>
+                        <dd>
+                          {new Date(d.updatedAt).toLocaleDateString(undefined, {
+                            dateStyle: "medium",
+                          })}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Reference</dt>
+                        <dd>THR-{d.id.slice(-3).toUpperCase()}</dd>
+                      </div>
+                    </dl>
+                  </div>
+                  <p className="border-t border-[var(--threads-border)] pt-4 text-xs leading-[1.55] text-[var(--threads-muted)]">
+                    {d.public
+                      ? token
+                        ? "Anyone can read and join this conversation."
+                        : "Anyone can read this conversation. Sign in to participate."
+                      : "Only you and the support team can read this conversation."}
+                  </p>
+                </aside>
                 <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
                   <DialogContent className="max-w-md rounded-none border-zinc-300 p-7 dark:border-zinc-700">
-                    <DialogHeader><DialogTitle>Thread details</DialogTitle><DialogDescription>Context for this conversation.</DialogDescription></DialogHeader>
+                    <DialogHeader>
+                      <DialogTitle>Thread details</DialogTitle>
+                      <DialogDescription>
+                        Context for this conversation.
+                      </DialogDescription>
+                    </DialogHeader>
                     <dl className="mt-4 divide-y divide-zinc-200 text-sm dark:divide-zinc-800">
-                      {[["Type", labels[d.category]], ["Visibility", d.public ? "Public" : "Private"], ["Status", statusLabels[displayStatus] || displayStatus], ["Participants", String(d.participantCount ?? 0)], ["Updated", new Date(d.updatedAt).toLocaleDateString(undefined, { dateStyle: "medium" })], ["Reference", `#THR-${d.id.slice(-3).toUpperCase()}`]].map(([label, value]) => <div key={label} className="flex justify-between gap-4 py-3"><dt className="text-zinc-500">{label}</dt><dd className="text-right font-medium">{value}</dd></div>)}
+                      {[
+                        ["Type", labels[d.category]],
+                        ["Visibility", d.public ? "Public" : "Private"],
+                        [
+                          "Status",
+                          statusLabels[displayStatus] || displayStatus,
+                        ],
+                        ["Participants", String(d.participantCount ?? 0)],
+                        [
+                          "Updated",
+                          new Date(d.updatedAt).toLocaleDateString(undefined, {
+                            dateStyle: "medium",
+                          }),
+                        ],
+                        ["Reference", `#THR-${d.id.slice(-3).toUpperCase()}`],
+                      ].map(([label, value]) => (
+                        <div
+                          key={label}
+                          className="flex justify-between gap-4 py-3"
+                        >
+                          <dt className="text-zinc-500">{label}</dt>
+                          <dd className="text-right font-medium">{value}</dd>
+                        </div>
+                      ))}
                     </dl>
                   </DialogContent>
                 </Dialog>
@@ -1027,18 +1291,14 @@ function ReplyReference({
   return (
     <a
       href={`#reply-${replyTo.id}`}
-      className="mb-3 block rounded-r-md border-l-2 border-[var(--threads-primary)] bg-muted/40 px-3 py-2 hover:bg-muted"
+      className="mb-3 block border-l-2 border-[var(--threads-primary)] bg-[var(--threads-surface-low)] px-3 py-2 text-[var(--threads-muted)] no-underline hover:bg-[var(--threads-surface-high)] [&_strong]:block [&_strong]:text-[13px] [&_strong]:text-[var(--threads-text)] [&_span]:mt-0.5 [&_span]:line-clamp-2 [&_span]:text-[13px] [&_span]:leading-normal"
       onClick={(event) => {
         event.preventDefault();
         navigateToReply(replyTo.id);
       }}
     >
-      <span className="block text-xs font-semibold">
-        Replying to {replyTo.author}
-      </span>
-      <span className="mt-0.5 line-clamp-2 block text-xs text-muted-foreground">
-        {replyTo.text}
-      </span>
+      <strong>Replying to {replyTo.author}</strong>
+      <span>{replyTo.text}</span>
     </a>
   );
 }

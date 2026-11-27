@@ -81,6 +81,7 @@ export function usePortalQueries({
         ...(view === "mine" ? { mine: "1" } : {}),
         ...(view === "upvoted" ? { engagement: "upvoted" } : {}),
         ...(view === "following" ? { engagement: "following" } : {}),
+        ...(view === "feature" && category ? { progress: category } : {}),
       });
       return threadsApi.listThreads(base, token, params);
     },

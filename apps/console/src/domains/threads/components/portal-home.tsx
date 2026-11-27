@@ -1,19 +1,24 @@
 import { formatDistanceToNow } from "date-fns";
 import {
+  ArrowRight,
   ArrowUp,
   Bell,
-  CheckCircle2,
-  CircleHelp,
-  Mail,
-  MessageSquare,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  LockKeyhole,
+  MessageCircle,
+  Plus,
   Search,
-  Sparkles,
-  Zap,
 } from "lucide-react";
-import type { ReactNode } from "react";
 import { Link } from "react-router";
 import { Loader } from "@/shared/ui/loader";
 import type { PortalView, Thread } from "../types/types";
+import {
+  WorkspaceHeading,
+  WorkspaceSectionHeading,
+  WorkspaceTabs,
+} from "./workspace-structure";
 
 type PortalHomeProps = {
   threads: Thread[];
@@ -33,43 +38,60 @@ type PortalHomeProps = {
   onSortChange: (value: string) => void;
   onPageChange: (page: number) => void;
   onVote: (thread: Thread) => void;
+  onViewChange: (view: PortalView) => void;
+  onNewThread: () => void;
 };
-const pageCopy: Record<PortalView, { title: string; description: string }> = {
+
+const copy: Record<
+  PortalView,
+  { eyebrow: string; title: string; description: string }
+> = {
   community: {
+    eyebrow: "Explore",
     title: "Community",
     description:
-      "Browse public discussions and ideas shared across this workspace.",
+      "A place for conversations, questions, and ideas worth sharing.",
   },
   feature: {
-    title: "Feature Requests",
-    description:
-      "Vote on product ideas and track where each request sits on the roadmap.",
+    eyebrow: "Explore",
+    title: "Featured",
+    description: "See the ideas shaping what comes next, and add your voice.",
   },
   mine: {
-    title: "My Threads",
+    eyebrow: "Your space",
+    title: "My threads",
     description:
-      "Follow your questions, requests, and discussions in one place.",
+      "Your conversations and the ideas you follow, together in one place.",
   },
   upvoted: {
-    title: "My Threads",
+    eyebrow: "Your space",
+    title: "My threads",
     description:
-      "Follow your questions, requests, and discussions in one place.",
+      "Your conversations and the ideas you follow, together in one place.",
   },
   following: {
-    title: "My Threads",
+    eyebrow: "Your space",
+    title: "My threads",
     description:
-      "Follow your questions, requests, and discussions in one place.",
+      "Your conversations and the ideas you follow, together in one place.",
   },
   updates: {
+    eyebrow: "Your space",
     title: "Updates",
-    description:
-      "Replies and status changes across threads you created or follow.",
+    description: "Recent activity in conversations you follow.",
   },
 };
-const labels = {
-  support: "Question",
+
+const categoryLabels = {
+  support: "Private support",
   discussion: "Discussion",
   feature: "Feature request",
+};
+const progressLabels = {
+  under_review: "Under review",
+  planned: "Planned",
+  in_progress: "In progress",
+  shipped: "Shipped",
 };
 
 export function PortalHome({
@@ -90,512 +112,320 @@ export function PortalHome({
   onSortChange,
   onPageChange,
   onVote,
+  onViewChange,
+  onNewThread,
 }: PortalHomeProps) {
-  const copy = pageCopy[view];
-  const stats = threads.reduce(
-    (summary, thread) => ({
-      replies: summary.replies + (thread.replyCount ?? 0),
-      votes: summary.votes + (thread.votes ?? 0),
-      resolved:
-        summary.resolved +
-        (thread.status === "resolved" || thread.progress === "shipped" ? 1 : 0),
-    }),
-    { replies: 0, votes: 0, resolved: 0 },
-  );
-  const popularRequests = [...threads]
-    .filter((thread) => thread.category === "feature")
-    .sort((a, b) => (b.votes ?? 0) - (a.votes ?? 0))
-    .slice(0, 3);
+  const isMine = ["mine", "upvoted", "following"].includes(view);
+  const filters: Array<readonly [string, string]> =
+    view === "feature"
+      ? [
+          ["", "All ideas"],
+          ["under_review", "Under review"],
+          ["planned", "Planned"],
+          ["in_progress", "In progress"],
+          ["shipped", "Shipped"],
+        ]
+      : view === "community"
+        ? [
+            ["", "All conversations"],
+            ["discussion", "Discussions"],
+            ["feature", "Feature requests"],
+          ]
+        : [
+            ["", "All types"],
+            ["support", "Private support"],
+            ["discussion", "Discussions"],
+            ["feature", "Feature requests"],
+          ];
 
   return (
-    <section className="threads-page [width:100%] [margin:0_auto]" aria-labelledby="threads-page-title">
-      <header className="threads-page-heading [display:flex] [align-items:end] [justify-content:space-between] [gap:20px] [padding:6px_0_22px] [&_h1]:[font-size:27px] [&_h1]:[line-height:33px] [&_h1]:[font-weight:650] [&_h1]:[letter-spacing:-0.55px] [&_p]:[max-width:680px] [&_p]:[margin-top:4px] [&_p]:[color:var(--threads-muted)] [&_p]:[font-size:13px] [&_p]:[line-height:20px] max-[767px]:[&_h1]:[font-size:22px] max-[767px]:[&_h1]:[line-height:28px] max-[767px]:[&_p]:[font-size:13px]">
-        <div>
-          <span className="threads-page-eyebrow [display:block] [margin-bottom:5px] [color:var(--threads-muted)] [font-size:10px] [font-weight:650] [letter-spacing:0.08em] [text-transform:uppercase]">InteraOne workspace</span>
-          <h1 id="threads-page-title">{copy.title}</h1>
-          <p>{copy.description}</p>
-        </div>
-      </header>
-      <section className="threads-toolbar [display:flex] [min-height:54px] [flex-wrap:wrap] [align-items:center] [justify-content:space-between] [gap:10px_18px] [padding:9px_0] [border-top:1px_solid_var(--threads-border)] [border-bottom:1px_solid_var(--threads-border)] [background:var(--threads-surface)] max-[767px]:[display:grid] max-[767px]:[padding:8px_0]" aria-label="Thread filters">
-        <div
-          className="threads-filter-tabs [display:flex] [min-width:0] [align-items:center] [gap:3px] [overflow-x:auto] [&_button]:[display:inline-flex] [&_button]:[height:32px] [&_button]:[flex:none] [&_button]:[align-items:center] [&_button]:[gap:6px] [&_button]:[padding:0_10px] [&_button]:[border-radius:7px] [&_button]:[color:var(--threads-muted)] [&_button]:[font-size:12px] [&_button]:[font-weight:600] [&_button]:[transition:color_120ms_ease,_background_120ms_ease] [&_button:hover]:[color:var(--threads-text)] [&_button:hover]:[background:var(--threads-surface-low)] [&_button.active]:[color:var(--threads-text)] [&_button.active]:[background:var(--threads-surface-high)] [&_svg]:[width:14px] [&_svg]:[height:14px] max-[767px]:[width:100%]"
-          role="group"
-          aria-label={`${copy.title} filters`}
-        >
-          {view === "feature" ? (
-            <>
-              <Filter active={!category} onClick={() => onCategoryChange("")}>
-                All
-              </Filter>
-              <Filter
-                active={category === "under_review"}
-                onClick={() => onCategoryChange("under_review")}
-              >
-                Under review
-              </Filter>
-              <Filter
-                active={category === "planned"}
-                onClick={() => onCategoryChange("planned")}
-              >
-                Planned
-              </Filter>
-              <Filter
-                active={category === "in_progress"}
-                onClick={() => onCategoryChange("in_progress")}
-                icon={<Zap />}
-              >
-                In progress
-              </Filter>
-              <Filter
-                active={category === "shipped"}
-                onClick={() => onCategoryChange("shipped")}
-                icon={<CheckCircle2 />}
-              >
-                Shipped
-              </Filter>
-            </>
-          ) : view === "updates" ? (
-            <Filter active icon={<Bell />}>
-              All updates
-            </Filter>
-          ) : view === "community" ? (
-            <>
-              <Filter active={!category} onClick={() => onCategoryChange("")}>
-                All
-              </Filter>
-              <Filter
-                active={category === "feature"}
-                onClick={() => onCategoryChange("feature")}
-                icon={<Sparkles />}
-              >
-                Feature requests
-              </Filter>
-              <Filter
-                active={category === "discussion"}
-                onClick={() => onCategoryChange("discussion")}
-                icon={<MessageSquare />}
-              >
-                Discussions
-              </Filter>
-            </>
-          ) : (
-            <>
-              <Filter active={!category} onClick={() => onCategoryChange("")}>
-                All
-              </Filter>
-              <Filter
-                active={category === "feature"}
-                onClick={() => onCategoryChange("feature")}
-                icon={<Sparkles />}
-              >
-                Feature requests
-              </Filter>
-              <Filter
-                active={category === "support"}
-                onClick={() => onCategoryChange("support")}
-                icon={<CircleHelp />}
-              >
-                Questions
-              </Filter>
-              <Filter
-                active={category === "discussion"}
-                onClick={() => onCategoryChange("discussion")}
-                icon={<MessageSquare />}
-              >
-                Discussions
-              </Filter>
-            </>
-          )}
-        </div>
+    <section className="w-full" aria-labelledby="threads-page-title">
+      <WorkspaceHeading
+        className="max-[600px]:pt-6 max-[600px]:pb-5"
+        eyebrow={copy[view].eyebrow}
+        title={copy[view].title}
+        description={copy[view].description}
+        action={
+          <button
+            type="button"
+            className="inline-flex min-h-[39px] items-center justify-center gap-2 rounded-md border border-[var(--threads-action-bg)] bg-[var(--threads-action-bg)] px-[15px] text-[13px] font-bold text-white hover:brightness-[0.92] max-[600px]:min-h-[35px]"
+            onClick={onNewThread}
+          >
+            <Plus size={18} /> Start a thread
+          </button>
+        }
+      />
+
+      {isMine && (
+        <WorkspaceTabs
+          variant="navigation"
+          label="My threads views"
+          items={[
+            ["mine", "Started by me"],
+            ["following", "Following"],
+            ["upvoted", "Upvoted"],
+          ]}
+          value={view}
+          onChange={(next) => onViewChange(next as PortalView)}
+        />
+      )}
+
+      <div className="bg-[var(--threads-surface)]">
+        <WorkspaceSectionHeading
+          className="min-h-[76px] max-[600px]:min-h-[70px] max-[600px]:flex-col max-[600px]:items-start max-[600px]:[&>div:last-child]:w-full"
+          title={
+            view === "updates"
+              ? "Recent activity"
+              : q
+                ? "Search results"
+                : view === "feature"
+                  ? "Feature requests"
+                  : isMine
+                    ? "Your conversations"
+                    : "All conversations"
+          }
+          detail={
+            loading
+              ? "Loading conversations…"
+              : `${threads.length}${hasNextPage ? "+" : ""} ${view === "updates" ? "updates" : "threads"}${page ? ` · page ${page + 1}` : ""}`
+          }
+          action={
+            view !== "updates" && (
+              <label className="flex items-center gap-2 text-[13px] text-[var(--threads-muted)] max-[600px]:w-full max-[600px]:justify-between">
+                <span>Sort by</span>
+                <select
+                  className="max-w-[170px] rounded-[5px] border border-[var(--threads-border)] bg-[var(--threads-surface)] px-[9px] py-[7px] text-[13px] font-semibold text-[var(--threads-text)]"
+                  value={sort}
+                  onChange={(event) => onSortChange(event.target.value)}
+                >
+                  <option value="latest">Recent activity</option>
+                  <option value="trending">Most popular</option>
+                  <option value="unanswered">Needs a reply</option>
+                  <option value="solved">Resolved</option>
+                </select>
+              </label>
+            )
+          }
+        />
+
         {view !== "updates" && (
-          <div className="threads-sort [display:flex] [flex:none] [align-items:center] [gap:7px] [&_label]:[display:flex] [&_label]:[height:32px] [&_label]:[align-items:center] [&_label]:[gap:5px] [&_label]:[padding:0_8px] [&_label]:[border:1px_solid_var(--threads-border)] [&_label]:[border-radius:7px] [&_label]:[color:var(--threads-muted)] [&_label]:[background:var(--threads-surface)] [&_label]:[font-size:11px] [&_span]:[font-weight:600] [&_select]:[max-width:108px] [&_select]:[border:0] [&_select]:[background:transparent] [&_select]:[color:var(--threads-text)] [&_select]:[font-size:11px] [&_select]:[font-weight:600] [&_select]:[outline:none] max-[767px]:[width:100%] max-[767px]:[justify-content:space-between] max-[767px]:[&_label]:[flex:1] max-[767px]:[&_label]:[justify-content:space-between]">
-            <label>
-              <span>Status</span>
-              <select
-                value={
-                  sort === "solved" || sort === "unanswered" ? sort : "all"
-                }
-                onChange={(event) =>
-                  onSortChange(
-                    event.target.value === "all"
-                      ? "latest"
-                      : event.target.value,
-                  )
-                }
-              >
-                <option value="all">All</option>
-                <option value="unanswered">Needs reply</option>
-                <option value="solved">Resolved</option>
-              </select>
-            </label>
-            <label>
-              <span>Sort</span>
-              <select
-                value={sort === "trending" ? "trending" : "latest"}
-                onChange={(event) => onSortChange(event.target.value)}
-              >
-                <option value="latest">Recent</option>
-                <option value="trending">Most voted</option>
-              </select>
-            </label>
-          </div>
+          <WorkspaceTabs
+            className="max-[600px]:pb-[9px]"
+            label="Filter threads"
+            items={filters}
+            value={category}
+            onChange={onCategoryChange}
+          />
         )}
+
         {q && (
-          <label className="threads-inline-search [display:flex] [width:100%] [height:38px] [align-items:center] [gap:8px] [padding:0_10px] [border:1px_solid_color-mix(in_srgb,_var(--threads-primary)_55%,_var(--threads-border))] [border-radius:8px] [&_svg]:[width:16px] [&_svg]:[color:var(--threads-primary)] [&_input]:[min-width:0] [&_input]:[flex:1] [&_input]:[outline:none] [&_button]:[color:var(--threads-primary)] [&_button]:[font-size:12px] [&_button]:[font-weight:600]">
-            <Search />
+          <div className="flex items-center gap-2.5 border-b border-[var(--threads-border)] py-2.5 text-[var(--threads-primary)]">
+            <Search size={16} />
             <input
+              className="min-w-0 flex-1 bg-transparent text-sm text-[var(--threads-text)] outline-none"
               autoFocus
               value={q}
               onChange={(event) => onSearchChange(event.target.value)}
               aria-label="Search threads"
             />
-            <button type="button" onClick={() => onSearchChange("")}>
-              Clear
+            <button
+              type="button"
+              className="whitespace-nowrap text-[13px] font-bold"
+              onClick={() => onSearchChange("")}
+            >
+              Clear search
             </button>
-          </label>
-        )}
-      </section>
-
-      <div className="threads-page-grid [display:grid] [grid-template-columns:minmax(0,_1fr)_300px] [align-items:stretch] [gap:0] max-[1180px]:[grid-template-columns:minmax(0,_1fr)_244px] max-[899px]:[grid-template-columns:minmax(0,_1fr)]">
-        <main className="threads-feed-panel [min-width:0] [padding-right:28px] [background:var(--threads-surface)] max-[899px]:[padding-right:0]">
-          <header className="threads-feed-heading [display:flex] [min-height:64px] [align-items:center] [justify-content:space-between] [gap:16px] [padding:12px_4px] [border-bottom:1px_solid_var(--threads-border)] [&_h2]:[font-size:13px] [&_h2]:[font-weight:650] [&_p]:[margin-top:2px] [&_p]:[color:var(--threads-muted)] [&_p]:[font-size:11px] [&>span]:[margin-top:2px] [&>span]:[color:var(--threads-muted)] [&>span]:[font-size:11px] max-[767px]:[min-height:58px] max-[767px]:[padding:11px_4px]">
-            <div>
-              <h2>
-                {q
-                  ? "Search results"
-                  : view === "updates"
-                    ? "Recent updates"
-                    : "Latest activity"}
-              </h2>
-              <p>
-                {loading
-                  ? "Refreshing threads…"
-                  : `${threads.length} thread${threads.length === 1 ? "" : "s"} in this view`}
-              </p>
-            </div>
-            {!loading && threads.length > 0 && <span>Page {page + 1}</span>}
-          </header>
-          <div className="threads-list [min-height:320px]" aria-busy={loading}>
-            {threads.map((thread) => (
-              <ThreadRow
-                key={thread.id}
-                thread={thread}
-                to={threadPath(thread.id)}
-                state={{ from: currentPath }}
-                update={view === "updates"}
-                signedIn={signedIn}
-                voting={votingId === thread.id}
-                onVote={() => onVote(thread)}
-              />
-            ))}
-            {loading && <ThreadRowsLoader />}
-            {!loading && threads.length === 0 && (
-              <EmptyThreads view={view} q={q} />
-            )}
           </div>
-          {!loading && threads.length > 0 && view === "updates" && (
-            <p className="threads-end [padding:13px_16px] [border-top:1px_solid_var(--threads-border)] [color:var(--threads-muted)] [font-size:11px] [text-align:center]">You&apos;re all caught up</p>
-          )}
-          {view !== "updates" && (page > 0 || hasNextPage) && (
-            <footer className="threads-pagination [display:flex] [align-items:center] [justify-content:end] [gap:12px] [padding:11px_14px] [border-top:1px_solid_var(--threads-border)] [font-size:11px] [&_button]:[padding:6px_10px] [&_button]:[border:1px_solid_var(--threads-border)] [&_button]:[border-radius:7px] [&_button:disabled]:[opacity:0.45]">
-              <button
-                type="button"
-                disabled={!page}
-                onClick={() => onPageChange(page - 1)}
-              >
-                Previous
-              </button>
-              <span>Page {page + 1}</span>
-              <button
-                type="button"
-                disabled={!hasNextPage}
-                onClick={() => onPageChange(page + 1)}
-              >
-                Next
-              </button>
-            </footer>
-          )}
-        </main>
+        )}
 
-        <aside className="threads-insights [display:block] [min-width:0] [padding-left:24px] [border-left:1px_solid_var(--threads-border)] max-[899px]:[display:grid] max-[899px]:[grid-template-columns:repeat(2,_minmax(0,_1fr))] max-[899px]:[padding-left:0] max-[899px]:[border-top:1px_solid_var(--threads-border)] max-[899px]:[border-left:0] max-[767px]:[display:block]" aria-label="Community insights">
-          <section className="threads-insight-card [border-bottom:1px_solid_var(--threads-border)] [background:var(--threads-surface)] [&>header]:[padding:18px_0_12px] [&>headerspan]:[display:block] [&>headerspan]:[color:var(--threads-muted)] [&>headerspan]:[font-size:9px] [&>headerspan]:[font-weight:700] [&>headerspan]:[letter-spacing:0.09em] [&>headerspan]:[text-transform:uppercase] [&>headerstrong]:[display:block] [&>headerstrong]:[margin-top:2px] [&>headerstrong]:[font-size:13px] [&>headerstrong]:[font-weight:650] max-[899px]:[padding:0_18px] max-[899px]:[&:nth-child(even)]:[border-left:1px_solid_var(--threads-border)] max-[767px]:[padding:0_4px] max-[767px]:[&:nth-child(even)]:[border-left:0]">
-            <header>
-              <span className="block text-[9px] font-bold tracking-wider text-[var(--threads-muted)] uppercase">Current view</span>
-              <strong className="mt-0.5 block text-[13px] font-semibold">Snapshot</strong>
-            </header>
-            <dl className="threads-stat-grid [display:grid] [grid-template-columns:repeat(2,_1fr)] [&_div]:[padding:12px_0] [&_div]:[border-right:1px_solid_color-mix(in_srgb,_var(--threads-border)_65%,_transparent)] [&_div]:[border-bottom:1px_solid_color-mix(in_srgb,_var(--threads-border)_65%,_transparent)] [&_div:nth-child(odd)]:[padding-right:14px] [&_div:nth-child(even)]:[padding-left:14px] [&_div:nth-child(even)]:[border-right:0] [&_div:nth-last-child(-n_+_2)]:[border-bottom:0] [&_dt]:[color:var(--threads-muted)] [&_dt]:[font-size:10px] [&_dt]:[font-weight:600] [&_dd]:[margin-top:3px] [&_dd]:[font-size:20px] [&_dd]:[font-weight:650] [&_dd]:[line-height:1] [&_dd]:[font-variant-numeric:tabular-nums]">
-              <div>
-                <dt>Threads</dt>
-                <dd>{threads.length}</dd>
-              </div>
-              <div>
-                <dt>Replies</dt>
-                <dd>{stats.replies}</dd>
-              </div>
-              <div>
-                <dt>Resolved</dt>
-                <dd>{stats.resolved}</dd>
-              </div>
-              <div>
-                <dt>Votes</dt>
-                <dd>{stats.votes}</dd>
-              </div>
-            </dl>
-          </section>
-          <section className="threads-insight-card [border-bottom:1px_solid_var(--threads-border)] [background:var(--threads-surface)] [&>header]:[padding:18px_0_12px] [&>headerspan]:[display:block] [&>headerspan]:[color:var(--threads-muted)] [&>headerspan]:[font-size:9px] [&>headerspan]:[font-weight:700] [&>headerspan]:[letter-spacing:0.09em] [&>headerspan]:[text-transform:uppercase] [&>headerstrong]:[display:block] [&>headerstrong]:[margin-top:2px] [&>headerstrong]:[font-size:13px] [&>headerstrong]:[font-weight:650] max-[899px]:[padding:0_18px] max-[899px]:[&:nth-child(even)]:[border-left:1px_solid_var(--threads-border)] max-[767px]:[padding:0_4px] max-[767px]:[&:nth-child(even)]:[border-left:0]">
-            <header>
-              <span className="block text-[9px] font-bold tracking-wider text-[var(--threads-muted)] uppercase">Community signal</span>
-              <strong className="mt-0.5 block text-[13px] font-semibold">Top requests</strong>
-            </header>
-            {popularRequests.length ? (
-              <div className="threads-top-requests [display:grid] [padding:4px_0_14px] [&_a]:[display:grid] [&_a]:[grid-template-columns:38px_minmax(0,_1fr)] [&_a]:[align-items:center] [&_a]:[gap:8px] [&_a]:[padding:8px_0] [&_a]:[border-radius:6px] [&_a:hover]:[background:var(--threads-surface-low)] [&_a_>_span]:[display:inline-flex] [&_a_>_span]:[height:28px] [&_a_>_span]:[align-items:center] [&_a_>_span]:[justify-content:center] [&_a_>_span]:[gap:2px] [&_a_>_span]:[border:1px_solid_var(--threads-border)] [&_a_>_span]:[border-radius:6px] [&_a_>_span]:[color:var(--threads-muted)] [&_a_>_span]:[font-size:10px] [&_a_>_span]:[font-weight:650] [&_svg]:[width:11px] [&_strong]:[overflow:hidden] [&_strong]:[text-overflow:ellipsis] [&_strong]:[white-space:nowrap] [&_strong]:[font-size:11px] [&_strong]:[font-weight:600]">
-                {popularRequests.map((thread) => (
-                  <Link
-                    key={thread.id}
-                    to={threadPath(thread.id)}
-                    state={{ from: currentPath }}
-                  >
-                    <span>
-                      <ArrowUp />
-                      {thread.votes ?? 0}
-                    </span>
-                    <strong>{thread.title}</strong>
-                  </Link>
-                ))}
-              </div>
-            ) : (
-              <p className="threads-insight-empty [padding:2px_0_18px] [color:var(--threads-muted)] [font-size:11px] [line-height:17px]">
-                Feature requests in the current view will appear here.
+        <div className="min-h-[200px]" aria-busy={loading}>
+          {threads.map((thread) => (
+            <ThreadRow
+              key={thread.id}
+              thread={thread}
+              to={threadPath(thread.id)}
+              currentPath={currentPath}
+              signedIn={signedIn}
+              voting={votingId === thread.id}
+              onVote={() => onVote(thread)}
+            />
+          ))}
+          {loading && (
+            <div
+              className="grid min-h-[200px] place-items-center"
+              role="status"
+              aria-label="Loading threads"
+            >
+              <Loader size="md" />
+            </div>
+          )}
+          {!loading && threads.length === 0 && (
+            <div className="grid min-h-[260px] content-center justify-items-start px-2 py-9 text-left max-[600px]:min-h-[220px]">
+              <span className="text-[var(--threads-primary)]">
+                {view === "updates" ? (
+                  <Bell size={23} />
+                ) : q ? (
+                  <Search size={23} />
+                ) : isMine ? (
+                  <LockKeyhole size={23} />
+                ) : (
+                  <MessageCircle size={23} />
+                )}
+              </span>
+              <h3 className="mt-2.5 text-base font-bold">
+                {q
+                  ? "No matching threads"
+                  : view === "updates"
+                    ? "You're all caught up"
+                    : isMine
+                      ? "Nothing here yet"
+                      : "No threads yet"}
+              </h3>
+              <p className="mt-1 max-w-[360px] text-sm leading-normal text-[var(--threads-muted)]">
+                {q
+                  ? "Try another search or remove a filter."
+                  : view === "updates"
+                    ? "New replies and status changes will appear here."
+                    : isMine
+                      ? "Conversations you start or save will appear here."
+                      : "Start the first conversation in this space."}
               </p>
-            )}
-          </section>
-        </aside>
+              {!q && view !== "updates" && (
+                <button
+                  type="button"
+                  onClick={onNewThread}
+                  className="mt-[14px] inline-flex items-center gap-1.5 text-[13px] font-bold text-[var(--threads-primary)]"
+                >
+                  Start a thread <ArrowRight size={15} />
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+
+        {view !== "updates" && (page > 0 || hasNextPage) && (
+          <footer className="flex items-center justify-between gap-2.5 py-[13px] text-[13px] text-[var(--threads-muted)] [&_button]:inline-flex [&_button]:items-center [&_button]:gap-[5px] [&_button]:py-[5px] [&_button]:font-bold [&_button]:text-[var(--threads-text)] [&_button:disabled]:opacity-40">
+            <button
+              type="button"
+              disabled={page === 0}
+              onClick={() => onPageChange(page - 1)}
+            >
+              <ChevronLeft size={16} /> Previous
+            </button>
+            <span>Page {page + 1}</span>
+            <button
+              type="button"
+              disabled={!hasNextPage}
+              onClick={() => onPageChange(page + 1)}
+            >
+              Next <ChevronRight size={16} />
+            </button>
+          </footer>
+        )}
       </div>
     </section>
   );
 }
-function Filter({
-  active,
-  icon,
-  children,
-  onClick,
-}: {
-  active?: boolean;
-  icon?: ReactNode;
-  children: ReactNode;
-  onClick?: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      className={active ? "active" : ""}
-      aria-pressed={active}
-      onClick={onClick}
-    >
-      {icon}
-      {children}
-    </button>
-  );
-}
+
 function ThreadRow({
   thread,
   to,
-  state,
-  update,
+  currentPath,
   signedIn,
   voting,
   onVote,
 }: {
   thread: Thread;
   to: string;
-  state: { from: string };
-  update: boolean;
+  currentPath: string;
   signedIn: boolean;
   voting: boolean;
   onVote: () => void;
 }) {
-  const resolved =
-    thread.status === "resolved" || thread.progress === "shipped";
   const status =
     thread.category === "feature"
-      ? {
-          under_review: "Under review",
-          planned: "Planned",
-          in_progress: "In progress",
-          shipped: "Shipped",
-        }[thread.progress || "under_review"]
-      : resolved
+      ? progressLabels[thread.progress || "under_review"]
+      : thread.status === "resolved"
         ? "Resolved"
-        : (thread.replyCount ?? 0) === 0
-          ? "Needs reply"
-          : "Open";
-  const statusTone = resolved
-    ? "resolved"
-    : thread.category === "feature"
-      ? thread.progress || "under_review"
-      : status === "Open"
-        ? "open"
-        : "needs_reply";
+        : thread.status === "closed"
+          ? "Closed"
+          : thread.replyCount
+            ? "Active"
+            : "Open";
+  const lastActivity = formatDistanceToNow(new Date(thread.updatedAt), {
+    addSuffix: true,
+  });
   return (
-    <article className={`threads-row [display:flex] [min-height:72px] [align-items:center] [gap:16px] [padding:12px_16px] [border-bottom:1px_solid_color-mix(in_srgb,_var(--threads-border)_75%,_transparent)] [transition:background_120ms_ease-out] last:[border-bottom:0] hover:[background:var(--threads-surface-low)] max-[767px]:[gap:10px] max-[767px]:[padding-inline:4px] max-[767px]:[align-items:flex-start] max-[767px]:[padding:14px_4px] ${update ? "threads-update-row [min-height:96px] [border:1px_solid_var(--threads-border)] [border-width:0_0_1px]" : ""} min-h-[72px] gap-4 px-4 py-3 hover:bg-[var(--threads-surface-low)] max-[767px]:gap-2.5 max-[767px]:px-1 max-[767px]:py-[14px]`}>
-      {update ? (
-        <span className="threads-update-icon [display:grid] [width:36px] [height:36px] [flex:none] [place-items:center] [border-radius:50%] [color:var(--threads-primary)] [background:var(--threads-surface-low)] [&_svg]:[width:17px]">
-          {resolved ? (
-            <CheckCircle2 />
-          ) : thread.category === "feature" ? (
-            <Sparkles />
-          ) : (
-            <Bell />
-          )}
-        </span>
-      ) : thread.category === "feature" ? (
-        <button
-          type="button"
-          className={`threads-vote [display:inline-flex] [width:40px] [height:46px] [flex:none] [flex-direction:column] [align-items:center] [justify-content:center] [border:1px_solid_var(--threads-border)] [border-radius:8px] [font-size:12px] [font-weight:600] [&.accent]:[border-color:var(--threads-primary)] [&.accent]:[color:var(--threads-primary)] [&.accent]:[background:color-mix(_in_srgb,_var(--threads-primary)_8%,_var(--threads-surface)_)] [&:is(button):hover]:[border-color:var(--threads-primary)] [&:is(button):hover]:[color:var(--threads-primary)] [&:is(button):hover]:[transform:translateY(-1px)] [&:is(button):disabled]:[cursor:wait] [&:is(button):disabled]:[opacity:0.65] [&_svg]:[width:12px] [&_svg]:[height:12px] ${thread.voted ? "accent" : ""}`}
-          aria-label={`${thread.voted ? "Remove upvote from" : "Upvote"} ${thread.title}`}
-          aria-pressed={thread.voted}
-          disabled={voting}
-          title={signedIn ? "Upvote this feature" : "Sign in to upvote"}
-          onClick={onVote}
-        >
-          {voting ? (
-            <span className="size-3 animate-pulse rounded-full bg-current" />
-          ) : (
-            <ArrowUp />
-          )}
-          {thread.votes ?? 0}
-        </button>
-      ) : (
-        <span className="threads-vote [display:inline-flex] [width:40px] [height:46px] [flex:none] [flex-direction:column] [align-items:center] [justify-content:center] [border:1px_solid_var(--threads-border)] [border-radius:8px] [font-size:12px] [font-weight:600] [&.accent]:[border-color:var(--threads-primary)] [&.accent]:[color:var(--threads-primary)] [&.accent]:[background:color-mix(_in_srgb,_var(--threads-primary)_8%,_var(--threads-surface)_)] [&:is(button):hover]:[border-color:var(--threads-primary)] [&:is(button):hover]:[color:var(--threads-primary)] [&:is(button):hover]:[transform:translateY(-1px)] [&:is(button):disabled]:[cursor:wait] [&:is(button):disabled]:[opacity:0.65] [&_svg]:[width:12px] [&_svg]:[height:12px]" aria-hidden="true">
-          <MessageSquare />
-          {thread.replyCount ?? 0}
-        </span>
-      )}
+    <article className="group grid min-h-[88px] grid-cols-[38px_minmax(0,1fr)] items-center gap-x-2.5 border-b border-[var(--threads-border)] py-3 transition-colors hover:bg-[var(--threads-surface-low)] min-[601px]:min-h-[90px] min-[601px]:grid-cols-[44px_minmax(0,1fr)_56px_132px] min-[601px]:gap-x-2.5 min-[601px]:px-[9px] min-[901px]:grid-cols-[44px_minmax(0,1fr)_72px_162px_20px] min-[901px]:gap-x-[14px]">
+      <div className="flex items-center justify-center">
+        {thread.category === "feature" && thread.public ? (
+          <button
+            type="button"
+            className={`grid min-h-[45px] w-[37px] place-items-center gap-px rounded-[5px] border py-1 text-xs font-bold hover:border-[var(--threads-primary)] hover:bg-[color-mix(in_srgb,var(--threads-primary)_6%,var(--threads-surface))] hover:text-[var(--threads-primary)] max-[600px]:min-h-[42px] max-[600px]:w-[34px] ${thread.voted ? "border-[var(--threads-primary)] bg-[color-mix(in_srgb,var(--threads-primary)_6%,var(--threads-surface))] text-[var(--threads-primary)]" : "border-[var(--threads-border)] bg-[var(--threads-surface)] text-[var(--threads-muted)]"}`}
+            aria-label={`${thread.voted ? "Remove upvote from" : "Upvote"} ${thread.title}`}
+            aria-pressed={thread.voted}
+            title={signedIn ? "Vote for this request" : "Sign in to vote"}
+            disabled={voting}
+            onClick={onVote}
+          >
+            <ArrowUp size={16} />
+            <span>{thread.votes ?? 0}</span>
+          </button>
+        ) : (
+          <span
+            className={`grid size-9 place-items-center max-[600px]:size-[34px] ${thread.public ? "text-[var(--threads-primary)]" : "text-[var(--threads-muted)]"}`}
+          >
+            {thread.public ? (
+              <MessageCircle size={19} />
+            ) : (
+              <LockKeyhole size={18} />
+            )}
+          </span>
+        )}
+      </div>
       <Link
         to={to}
-        state={state}
-        className="flex min-w-0 flex-1 flex-col gap-[3px] rounded-md outline-none focus-visible:ring-2 focus-visible:ring-[var(--threads-primary)]"
+        state={{ from: currentPath }}
+        className="block min-w-0 text-inherit no-underline hover:[&_h3]:text-[var(--threads-primary)]"
       >
-        <span className="threads-row-title [display:flex] [flex-wrap:wrap] [align-items:center] [gap:8px] [&_strong]:[overflow:hidden] [&_strong]:[text-overflow:ellipsis] [&_strong]:[font-size:15px] [&_strong]:[font-weight:600]">
-          <strong>{thread.title}</strong>
-          <em
-            className={`threads-status-badge [display:inline-flex] [height:23px] [align-items:center] [padding:0_8px] [border:1px_solid_color-mix(in_srgb,_currentColor_28%,_var(--threads-border))] [border-radius:6px] [color:var(--threads-muted)] [background:transparent] [font-size:11px] [font-style:normal] [font-weight:600] [line-height:1] [white-space:nowrap] [&.status-open]:[color:#2563eb] [&.status-under-review]:[color:#a16207] [&.status-needs-reply]:[color:#a16207] [&.status-planned]:[color:#7c3aed] [&.status-in-progress]:[color:#0369a1] [&.status-resolved]:[color:#15803d] [&.status-shipped]:[color:#15803d] [&.status-closed]:[color:#64748b] dark:[&.status-open]:[color:#93c5fd] dark:[&.status-under-review]:[color:#facc15] dark:[&.status-needs-reply]:[color:#facc15] dark:[&.status-planned]:[color:#c4b5fd] dark:[&.status-in-progress]:[color:#7dd3fc] dark:[&.status-resolved]:[color:#86efac] dark:[&.status-shipped]:[color:#86efac] dark:[&.status-closed]:[color:#cbd5e1] status-${statusTone.replaceAll("_", "-")}`}
-          >
-            {status}
-          </em>
-          <code className="whitespace-nowrap text-[11px] text-[var(--threads-muted)]">THR-{thread.id.slice(-3).toUpperCase()}</code>
-        </span>
-        <span className="threads-row-summary [display:block] [margin-top:3px] [color:var(--threads-muted)] [font-size:12px] max-[767px]:[overflow:hidden] max-[767px]:[text-overflow:ellipsis] max-[767px]:[white-space:nowrap]">
-          {update
-            ? `Activity on your ${labels[thread.category].toLowerCase()}.`
-            : thread.public
-              ? `${labels[thread.category]} in the public workspace.`
-              : "A private support thread."}
-          <b aria-hidden="true" className="mx-[7px] font-normal">·</b>
-          <span>{labels[thread.category]}</span>
-        </span>
+        <div className="flex flex-wrap gap-1.5 text-xs font-semibold leading-[1.35] text-[var(--threads-muted)]">
+          <span>{categoryLabels[thread.category]}</span>
+          {thread.humanSupport && <span>· Support team</span>}
+        </div>
+        <h3 className="mt-1 overflow-hidden text-[15px] font-bold leading-[1.4] tracking-[-0.012em] text-[var(--threads-text)] text-ellipsis min-[601px]:text-base">
+          {thread.title}
+        </h3>
       </Link>
-      <div className="flex shrink-0 items-center gap-[18px] max-[767px]:gap-2 max-[767px]:[&_.threads-participants [display:flex] [flex:none] [align-items:center] [padding:0_5px_0_10px] max-[767px]:[display:none]]:hidden">
-        <ParticipantProfiles thread={thread} />
-        <span className="flex w-[52px] items-center justify-end gap-[5px] text-xs text-[var(--threads-muted)] tabular-nums max-[767px]:w-auto" aria-label={`${thread.replyCount ?? 0} replies`}>
-          <MessageSquare className="size-3.5" /> {thread.replyCount ?? 0}
+      <div
+        className="hidden items-center gap-[5px] text-[13px] tabular-nums text-[var(--threads-muted)] min-[601px]:flex"
+        aria-label={`${thread.replyCount ?? 0} replies`}
+      >
+        <MessageCircle size={15} /> {thread.replyCount ?? 0}
+      </div>
+      <div className="col-start-2 mt-1 flex min-w-0 gap-2 text-left min-[601px]:col-auto min-[601px]:mt-0 min-[601px]:grid min-[601px]:justify-items-end min-[601px]:gap-[3px] min-[601px]:text-right">
+        <span
+          className={`inline-flex items-center gap-[3px] text-xs font-bold ${thread.status === "resolved" || thread.progress === "shipped" ? "text-[var(--threads-success)]" : "text-[var(--threads-primary)]"}`}
+        >
+          {thread.status === "resolved" || thread.progress === "shipped" ? (
+            <Check size={12} />
+          ) : null}
+          {status}
         </span>
-        <time dateTime={thread.updatedAt} className="w-[72px] whitespace-nowrap text-right text-[11px] text-[var(--threads-muted)] max-[767px]:w-[58px]">
-          {formatDistanceToNow(new Date(thread.updatedAt), { addSuffix: false })}
+        <time
+          dateTime={thread.updatedAt}
+          className="text-xs text-[var(--threads-muted)] max-[600px]:whitespace-normal min-[601px]:whitespace-nowrap"
+        >
+          {lastActivity}
         </time>
       </div>
+      <Link
+        to={to}
+        state={{ from: currentPath }}
+        className="hidden size-7 place-items-center text-[var(--threads-muted)] opacity-60 group-hover:text-[var(--threads-primary)] group-hover:opacity-100 min-[901px]:grid"
+        aria-label={`Open ${thread.title}`}
+      >
+        <ArrowRight size={17} />
+      </Link>
     </article>
-  );
-}
-
-function ParticipantProfiles({ thread }: { thread: Thread }) {
-  const total = thread.participantCount ?? 0;
-  const profiles = thread.participantProfiles ?? [];
-  if (total === 0) return null;
-
-  const visibleProfiles = profiles.slice(0, 3);
-  const remaining = Math.max(0, total - Math.max(visibleProfiles.length, 1));
-  const names = visibleProfiles.map((profile) => profile.name).join(", ");
-
-  return (
-    <span
-      className="threads-participants [display:flex] [flex:none] [align-items:center] [padding:0_5px_0_10px] max-[767px]:[display:none] w-20 justify-end pr-[5px] pl-0"
-      aria-label={
-        names || `${total} email participant${total === 1 ? "" : "s"}`
-      }
-    >
-      {visibleProfiles.length > 0 ? (
-        visibleProfiles.map((profile) => (
-          <span
-            key={profile.id}
-            className="threads-participant-avatar [display:grid] [width:29px] [height:29px] [place-items:center] [margin-left:-8px] [border:2px_solid_var(--threads-surface)] [border-radius:50%] [color:var(--threads-text)] [background:var(--threads-surface-high)] [box-shadow:0_1px_3px_rgb(15_23_42_/_10%)] [font-size:9px] [font-weight:700] [letter-spacing:-0.01em] first:[margin-left:0] [&:nth-child(2)]:[background:color-mix(_in_srgb,_var(--threads-primary)_9%,_var(--threads-surface)_)] [&:nth-child(3)]:[background:color-mix(_in_srgb,_var(--threads-success)_8%,_var(--threads-surface)_)] [&_svg]:[width:13px] [&_svg]:[height:13px] [&[data-source=\'ai\']]:[color:var(--threads-primary)]"
-            title={profile.name}
-            data-source={profile.source}
-            aria-hidden="true"
-          >
-            {profile.source === "ai" ? <Sparkles /> : profile.initials}
-          </span>
-        ))
-      ) : (
-        <span
-          className="threads-participant-avatar [display:grid] [width:29px] [height:29px] [place-items:center] [margin-left:-8px] [border:2px_solid_var(--threads-surface)] [border-radius:50%] [color:var(--threads-text)] [background:var(--threads-surface-high)] [box-shadow:0_1px_3px_rgb(15_23_42_/_10%)] [font-size:9px] [font-weight:700] [letter-spacing:-0.01em] first:[margin-left:0] [&:nth-child(2)]:[background:color-mix(_in_srgb,_var(--threads-primary)_9%,_var(--threads-surface)_)] [&:nth-child(3)]:[background:color-mix(_in_srgb,_var(--threads-success)_8%,_var(--threads-surface)_)] [&_svg]:[width:13px] [&_svg]:[height:13px] [&[data-source=\'ai\']]:[color:var(--threads-primary)]"
-          title="Email participant"
-          aria-hidden="true"
-        >
-          <Mail />
-        </span>
-      )}
-      {remaining > 0 && (
-        <span
-          className="threads-participant-avatar [display:grid] [width:29px] [height:29px] [place-items:center] [margin-left:-8px] [border:2px_solid_var(--threads-surface)] [border-radius:50%] [color:var(--threads-text)] [background:var(--threads-surface-high)] [box-shadow:0_1px_3px_rgb(15_23_42_/_10%)] [font-size:9px] [font-weight:700] [letter-spacing:-0.01em] first:[margin-left:0] [&:nth-child(2)]:[background:color-mix(_in_srgb,_var(--threads-primary)_9%,_var(--threads-surface)_)] [&:nth-child(3)]:[background:color-mix(_in_srgb,_var(--threads-success)_8%,_var(--threads-surface)_)] [&_svg]:[width:13px] [&_svg]:[height:13px] [&[data-source=\'ai\']]:[color:var(--threads-primary)] threads-participant-overflow [color:var(--threads-muted)] [background:var(--threads-surface)] [font-size:9px]"
-          title={`${remaining} more participant${remaining === 1 ? "" : "s"}`}
-          aria-hidden="true"
-        >
-          +{remaining}
-        </span>
-      )}
-    </span>
-  );
-}
-function ThreadRowsLoader() {
-  return (
-    <div
-      role="status"
-      aria-label="Loading threads"
-      className="grid min-h-72 place-items-center"
-    >
-      <Loader size="md" />
-    </div>
-  );
-}
-function EmptyThreads({ view, q }: { view: PortalView; q: string }) {
-  const title =
-    view === "updates"
-      ? "All caught up"
-      : view === "upvoted"
-        ? "No upvoted threads"
-        : view === "following"
-          ? "No followed threads"
-          : view === "feature"
-            ? "No matching feature requests"
-            : view === "community"
-              ? "No matching discussions"
-              : "No matching threads";
-  return (
-    <div className="threads-empty [display:grid] [min-height:360px] [place-items:center] [align-content:center] [padding:30px] [text-align:center] [&>svg]:[width:26px] [&>svg]:[color:var(--threads-muted)] [&_h2]:[margin-top:10px] [&_h2]:[font-size:16px] [&_h2]:[font-weight:600] [&_p]:[margin-top:3px] [&_p]:[color:var(--threads-muted)] [&_p]:[font-size:13px]">
-      <Search />
-      <h2>{title}</h2>
-      <p>
-        {q
-          ? "Try a different search term or clear the current filters."
-          : view === "updates"
-            ? "New replies and status changes will appear here."
-            : view === "upvoted"
-              ? "Threads you upvote will appear here."
-              : view === "following"
-                ? "Threads you follow will appear here."
-                : "There is nothing in this view yet."}
-      </p>
-    </div>
   );
 }

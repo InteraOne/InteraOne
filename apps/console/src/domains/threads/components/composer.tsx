@@ -155,19 +155,24 @@ export function Composer({
             value={text}
             onChange={(e) => setText(e.target.value)}
             placeholder={
-              placeholder ?? (reply ? "Share context, use cases, or implementation feedback..." : "Share your thoughts…")
+              placeholder ??
+              (reply
+                ? "Share context, use cases, or implementation feedback..."
+                : "Share your thoughts…")
             }
             className={
               reply
-                ? "min-h-[88px] w-full resize-y rounded-md border border-[var(--threads-border)] bg-[var(--threads-surface)] p-[9px] text-[13px] leading-[19px] shadow-none focus-visible:border-[var(--threads-primary)] focus-visible:ring-2 focus-visible:ring-[var(--threads-primary)]/15"
-                : "min-h-36 resize-y rounded-none border-0 bg-transparent px-4 py-3 text-sm leading-6 shadow-none focus-visible:ring-0"
+                ? "min-h-[112px] w-full resize-y rounded-md border border-[var(--threads-border)] bg-[var(--threads-surface)] p-3 text-[15px] leading-6 text-[var(--threads-text)] shadow-none placeholder:text-[var(--threads-muted)] dark:bg-[var(--threads-surface)] focus-visible:border-[var(--threads-primary)] focus-visible:ring-2 focus-visible:ring-[var(--threads-primary)]/15"
+                : "min-h-36 resize-y rounded-none border-0 bg-transparent px-4 py-3 text-[15px] leading-6 shadow-none focus-visible:ring-0"
             }
           />
         </label>
         {preview && (
           <div
             className={
-              reply ? "min-h-16 px-3 py-2 text-sm" : "min-h-36 px-4 py-3"
+              reply
+                ? "min-h-16 px-3 py-2 text-[15px] leading-6"
+                : "min-h-36 px-4 py-3 text-[15px] leading-6"
             }
           >
             <RichText text={text || "Your message preview appears here."} />
@@ -196,15 +201,13 @@ export function Composer({
         ))}
         {reply ? (
           <div className="flex min-h-12 items-center justify-between gap-2 border-t border-slate-100 px-3 text-slate-500 dark:border-slate-800">
-            <span className="text-xs">
+            <span className="text-[13px]">
               {uploading ? "Uploading attachment…" : "Markdown supported"}
             </span>
-            <div className="flex items-center gap-[5px]">
-              {action}
-            </div>
+            <div className="flex items-center gap-[5px]">{action}</div>
           </div>
         ) : (
-          <div className="flex items-center justify-between gap-3 border-t border-border/60 bg-muted/20 px-4 py-2 text-[11px] text-muted-foreground">
+          <div className="flex items-center justify-between gap-3 border-t border-border/60 bg-muted/20 px-4 py-2 text-[12px] text-muted-foreground">
             <span>
               {uploading ? "Uploading attachment…" : "Markdown supported"}
             </span>
