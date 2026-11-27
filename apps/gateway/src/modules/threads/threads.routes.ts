@@ -182,6 +182,17 @@ function search(q: unknown) {
   if (!q) return {};
   if (typeof q !== "string" || q.length > 100)
     throw new AppError("Search is too long", 400);
+  const reference = /^#?THR-([0-9a-f]{3})$/i.exec(q.trim());
+  if (reference) {
+    return {
+      $expr: {
+        $eq: [
+          { $substrBytes: [{ $toString: "$_id" }, 21, 3] },
+          reference[1].toLowerCase(),
+        ],
+      },
+    };
+  }
   return {
     subject: {
       $regex: q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
